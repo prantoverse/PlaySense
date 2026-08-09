@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -14,6 +15,10 @@ public class PlaySenseDashboard : EditorWindow
     private string selectedSessionPath;
     private string selectedPdfPath;
 
+    // =========================================================
+    // WINDOW
+    // =========================================================
+
     [MenuItem("Window/PlaySense/Dashboard")]
     public static void ShowWindow()
     {
@@ -21,12 +26,32 @@ public class PlaySenseDashboard : EditorWindow
             GetWindow<PlaySenseDashboard>("PlaySense");
 
         window.minSize =
-            new Vector2(700f, 500f);
+            new Vector2(900f, 600f);
 
         window.Show();
     }
 
+    // =========================================================
+    // GUI
+    // =========================================================
+
     private void OnGUI()
+    {
+        try
+        {
+            DrawDashboard();
+        }
+        catch (Exception exception)
+        {
+            GUIUtility.ExitGUI();
+
+            Debug.LogError(
+                "[PlaySense] Dashboard GUI error:\n" +
+                exception);
+        }
+    }
+
+    private void DrawDashboard()
     {
         mainScroll =
             EditorGUILayout.BeginScrollView(
@@ -98,10 +123,33 @@ public class PlaySenseDashboard : EditorWindow
             GUILayout.Width(90),
             GUILayout.Height(26)))
         {
-            Repaint();
+            RefreshDashboard();
         }
 
         GUILayout.EndHorizontal();
+    }
+
+    // =========================================================
+    // REFRESH
+    // =========================================================
+
+    private void RefreshDashboard()
+    {
+        if (!string.IsNullOrEmpty(selectedSessionPath) &&
+            File.Exists(selectedSessionPath))
+        {
+            selectedSession =
+                SessionStorage.Load(
+                    selectedSessionPath);
+        }
+        else
+        {
+            selectedSession = null;
+            selectedSessionPath = null;
+            selectedPdfPath = null;
+        }
+
+        Repaint();
     }
 
     // =========================================================
@@ -126,6 +174,9 @@ public class PlaySenseDashboard : EditorWindow
 
         string[] sessionFiles =
             SessionStorage.GetSessionFiles();
+
+        if (sessionFiles == null)
+            sessionFiles = new string[0];
 
         GUILayout.Label(
             $"{sessionFiles.Length} recorded session(s)",
@@ -157,6 +208,9 @@ public class PlaySenseDashboard : EditorWindow
 
         foreach (string path in sessionFiles)
         {
+            if (string.IsNullOrWhiteSpace(path))
+                continue;
+
             DrawSessionCard(path);
         }
 
@@ -165,8 +219,12 @@ public class PlaySenseDashboard : EditorWindow
         GUILayout.EndVertical();
     }
 
-    private void DrawSessionCard(string path)
+    private void DrawSessionCard(
+        string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
         SessionData session =
             SessionStorage.Load(path);
 
@@ -181,7 +239,9 @@ public class PlaySenseDashboard : EditorWindow
         GUIStyle titleStyle =
             new GUIStyle(GUI.skin.label);
 
-        titleStyle.fontStyle = FontStyle.Bold;
+        titleStyle.fontStyle =
+            FontStyle.Bold;
+
         titleStyle.fontSize = 12;
 
         GUILayout.Label(
@@ -221,7 +281,10 @@ public class PlaySenseDashboard : EditorWindow
         if (selected)
         {
             GUI.enabled = false;
-            GUILayout.Button("Selected");
+
+            GUILayout.Button(
+                "Selected");
+
             GUI.enabled = true;
         }
         else
@@ -275,7 +338,8 @@ public class PlaySenseDashboard : EditorWindow
             new GUIStyle(GUI.skin.label);
 
         sectionStyle.fontSize = 14;
-        sectionStyle.fontStyle = FontStyle.Bold;
+        sectionStyle.fontStyle =
+            FontStyle.Bold;
 
         GUILayout.Label(
             "Session Details",
@@ -292,7 +356,7 @@ public class PlaySenseDashboard : EditorWindow
 
         if (selectedSession == null)
         {
-            GUILayout.FlexibleSpace();
+            GUILayout.Space(100);
 
             GUILayout.Label(
                 "No session selected",
@@ -301,8 +365,6 @@ public class PlaySenseDashboard : EditorWindow
             GUILayout.Label(
                 "Select a recorded session to inspect its data.",
                 EditorStyles.centeredGreyMiniLabel);
-
-            GUILayout.FlexibleSpace();
         }
         else
         {
@@ -320,11 +382,17 @@ public class PlaySenseDashboard : EditorWindow
             new GUIStyle(GUI.skin.label);
 
         titleStyle.fontSize = 12;
-        titleStyle.fontStyle = FontStyle.Bold;
+        titleStyle.fontStyle =
+            FontStyle.Bold;
+
+        string sessionName =
+            string.IsNullOrEmpty(selectedSessionPath)
+                ? "Selected Session"
+                : Path.GetFileNameWithoutExtension(
+                    selectedSessionPath);
 
         GUILayout.Label(
-            Path.GetFileNameWithoutExtension(
-                selectedSessionPath),
+            sessionName,
             titleStyle);
 
         GUILayout.Space(10);
@@ -337,7 +405,8 @@ public class PlaySenseDashboard : EditorWindow
             new GUIStyle(GUI.skin.label);
 
         sectionStyle.fontSize = 14;
-        sectionStyle.fontStyle = FontStyle.Bold;
+        sectionStyle.fontStyle =
+            FontStyle.Bold;
 
         GUILayout.Label(
             "Session Information",
@@ -437,7 +506,8 @@ public class PlaySenseDashboard : EditorWindow
             new GUIStyle(GUI.skin.label);
 
         valueStyle.fontSize = 16;
-        valueStyle.fontStyle = FontStyle.Bold;
+        valueStyle.fontStyle =
+            FontStyle.Bold;
 
         GUILayout.Label(
             value,
@@ -469,18 +539,24 @@ public class PlaySenseDashboard : EditorWindow
             GameEventData gameEvent =
                 selectedSession.Events[i];
 
+            if (gameEvent == null)
+                continue;
+
             string category =
-                string.IsNullOrEmpty(gameEvent.Category)
+                string.IsNullOrEmpty(
+                    gameEvent.Category)
                     ? "Event"
                     : gameEvent.Category;
 
             string action =
-                string.IsNullOrEmpty(gameEvent.Action)
+                string.IsNullOrEmpty(
+                    gameEvent.Action)
                     ? "Unknown action"
                     : gameEvent.Action;
 
             string target =
-                string.IsNullOrEmpty(gameEvent.Target)
+                string.IsNullOrEmpty(
+                    gameEvent.Target)
                     ? ""
                     : $" — {gameEvent.Target}";
 
@@ -508,7 +584,9 @@ public class PlaySenseDashboard : EditorWindow
         GUILayout.BeginHorizontal();
 
         GUI.enabled =
-            selectedSession != null;
+            selectedSession != null &&
+            !string.IsNullOrWhiteSpace(
+                selectedSessionPath);
 
         if (GUILayout.Button(
             "Generate PDF Report",
@@ -518,7 +596,8 @@ public class PlaySenseDashboard : EditorWindow
         }
 
         GUI.enabled =
-            !string.IsNullOrEmpty(selectedPdfPath) &&
+            !string.IsNullOrWhiteSpace(
+                selectedPdfPath) &&
             File.Exists(selectedPdfPath);
 
         if (GUILayout.Button(
@@ -558,15 +637,38 @@ public class PlaySenseDashboard : EditorWindow
         string path,
         SessionData session)
     {
-        selectedSessionPath = path;
-        selectedSession = session;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            Debug.LogError(
+                "[PlaySense] Cannot select session: path is empty.");
+
+            return;
+        }
+
+        if (session == null)
+        {
+            Debug.LogError(
+                "[PlaySense] Cannot select session: SessionData is null.");
+
+            return;
+        }
+
+        selectedSessionPath =
+            Path.GetFullPath(path);
+
+        selectedSession =
+            session;
 
         selectedPdfPath =
             Path.ChangeExtension(
-                path,
+                selectedSessionPath,
                 ".pdf");
 
-        detailsScroll = Vector2.zero;
+        detailsScroll =
+            Vector2.zero;
+
+        Debug.Log(
+            $"[PlaySense] Selected session:\n{selectedSessionPath}");
 
         Repaint();
     }
@@ -575,8 +677,12 @@ public class PlaySenseDashboard : EditorWindow
     // DELETE
     // =========================================================
 
-    private void DeleteSession(string path)
+    private void DeleteSession(
+        string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
         bool confirmed =
             EditorUtility.DisplayDialog(
                 "Delete PlaySense Session",
@@ -600,7 +706,7 @@ public class PlaySenseDashboard : EditorWindow
             if (File.Exists(pdfPath))
                 File.Delete(pdfPath);
         }
-        catch (System.Exception exception)
+        catch (Exception exception)
         {
             Debug.LogError(
                 $"PlaySense could not delete the session:\n{exception}");
@@ -608,7 +714,14 @@ public class PlaySenseDashboard : EditorWindow
             return;
         }
 
-        if (selectedSessionPath == path)
+        if (selectedSessionPath == path ||
+            (
+                !string.IsNullOrEmpty(
+                    selectedSessionPath) &&
+                Path.GetFullPath(path) ==
+                Path.GetFullPath(
+                    selectedSessionPath)
+            ))
         {
             selectedSessionPath = null;
             selectedSession = null;
@@ -619,66 +732,160 @@ public class PlaySenseDashboard : EditorWindow
     }
 
     // =========================================================
-    // PDF
+    // PDF GENERATION
     // =========================================================
 
     private void GenerateReport()
     {
         if (selectedSession == null)
+        {
+            EditorUtility.DisplayDialog(
+                "PlaySense",
+                "No session is selected.",
+                "OK");
+
             return;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+            selectedSessionPath))
+        {
+            EditorUtility.DisplayDialog(
+                "PlaySense",
+                "The selected session does not have a valid file path.",
+                "OK");
+
+            Debug.LogError(
+                "[PlaySense] PDF generation aborted: selectedSessionPath is empty.");
+
+            return;
+        }
+
+        string sessionPath =
+            Path.GetFullPath(
+                selectedSessionPath);
+
+        if (!File.Exists(sessionPath))
+        {
+            EditorUtility.DisplayDialog(
+                "PlaySense",
+                "The selected session file no longer exists.",
+                "OK");
+
+            Debug.LogError(
+                $"[PlaySense] Session file not found:\n{sessionPath}");
+
+            return;
+        }
 
         string outputPath =
             Path.ChangeExtension(
-                selectedSessionPath,
+                sessionPath,
                 ".pdf");
 
-        string generatedPath =
-            PlaySensePDFExporter.Export(
-                selectedSession,
-                outputPath);
-
-        if (string.IsNullOrEmpty(generatedPath))
-            return;
-
-        selectedPdfPath =
-            generatedPath;
-
-        AssetDatabase.Refresh();
-
-        bool openNow =
-            EditorUtility.DisplayDialog(
-                "PlaySense Report Generated",
-                $"PDF report created successfully.\n\n{generatedPath}",
-                "Open PDF",
-                "Close");
-
-        if (openNow)
+        if (string.IsNullOrWhiteSpace(outputPath))
         {
-            OpenPdf(generatedPath);
+            EditorUtility.DisplayDialog(
+                "PlaySense",
+                "Could not determine a PDF output path.",
+                "OK");
+
+            return;
+        }
+
+        Debug.Log(
+            $"[PlaySense] Generating PDF:\n{outputPath}");
+
+        try
+        {
+            string generatedPath =
+                PlaySensePDFExporter.Export(
+                    selectedSession,
+                    outputPath);
+
+            if (string.IsNullOrWhiteSpace(
+                generatedPath))
+            {
+                EditorUtility.DisplayDialog(
+                    "PlaySense",
+                    "PDF generation failed. Check the Console for details.",
+                    "OK");
+
+                return;
+            }
+
+            selectedPdfPath =
+                generatedPath;
+
+            AssetDatabase.Refresh();
+
+            bool openNow =
+                EditorUtility.DisplayDialog(
+                    "PlaySense Report Generated",
+                    $"PDF report created successfully.\n\n{generatedPath}",
+                    "Open PDF",
+                    "Close");
+
+            if (openNow)
+            {
+                OpenPdf(generatedPath);
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError(
+                $"[PlaySense] PDF generation failed:\n{exception}");
+
+            EditorUtility.DisplayDialog(
+                "PlaySense PDF Error",
+                "The PDF could not be generated.\n\nCheck the Unity Console for the full error.",
+                "OK");
         }
 
         Repaint();
     }
 
-    private void OpenPdf(string path)
+    // =========================================================
+    // OPEN PDF
+    // =========================================================
+
+    private void OpenPdf(
+        string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
         if (!File.Exists(path))
             return;
 
-        System.Diagnostics.Process.Start(
-            new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = path,
-                UseShellExecute = true
-            });
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                });
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError(
+                $"[PlaySense] Could not open PDF:\n{exception}");
+        }
     }
+
+    // =========================================================
+    // REVEAL PDF
+    // =========================================================
 
     private void RevealPdf()
     {
-        if (string.IsNullOrEmpty(selectedPdfPath))
+        if (string.IsNullOrWhiteSpace(
+            selectedPdfPath))
             return;
 
-        if (!File.Exists(selectedPdfPath))
+        if (!File.Exists(
+            selectedPdfPath))
         {
             EditorUtility.DisplayDialog(
                 "PDF Not Found",
@@ -689,6 +896,7 @@ public class PlaySenseDashboard : EditorWindow
         }
 
         EditorUtility.RevealInFinder(
-            Path.GetFullPath(selectedPdfPath));
+            Path.GetFullPath(
+                selectedPdfPath));
     }
 }

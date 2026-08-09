@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
+
 using PlaySense.Data.Models;
 using PlaySense.Reporting;
 
@@ -31,7 +32,54 @@ namespace PlaySense.Export
             if (session == null)
             {
                 Debug.LogError(
-                    "PlaySense PDF Export failed: SessionData is null.");
+                    "[PlaySense] PDF Export failed: SessionData is null.");
+
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(outputPath))
+            {
+                Debug.LogError(
+                    "[PlaySense] PDF Export failed: output path is empty.");
+
+                return null;
+            }
+
+            try
+            {
+                outputPath =
+                    Path.GetFullPath(outputPath);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    $"[PlaySense] PDF Export failed: invalid output path.\n{exception}");
+
+                return null;
+            }
+
+            string directory =
+                Path.GetDirectoryName(outputPath);
+
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                Debug.LogError(
+                    $"[PlaySense] PDF Export failed: could not determine output directory.\n{outputPath}");
+
+                return null;
+            }
+
+            try
+            {
+                if (!Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    $"[PlaySense] PDF Export failed: could not create output directory.\n{exception}");
 
                 return null;
             }
@@ -46,6 +94,14 @@ namespace PlaySense.Export
             BehaviourReport behaviour =
                 analyzer.Analyze(session);
 
+            if (behaviour == null)
+            {
+                Debug.LogError(
+                    "[PlaySense] PDF Export failed: behavioural analysis returned null.");
+
+                return null;
+            }
+
             // -------------------------------------------------
             // Build pages
             // -------------------------------------------------
@@ -55,15 +111,46 @@ namespace PlaySense.Export
                     session,
                     behaviour);
 
+            if (pages == null ||
+                pages.Count == 0)
+            {
+                Debug.LogError(
+                    "[PlaySense] PDF Export failed: no pages were generated.");
+
+                return null;
+            }
+
             string pdf =
                 BuildPdf(pages);
 
-            File.WriteAllBytes(
-                outputPath,
-                Encoding.ASCII.GetBytes(pdf));
+            if (string.IsNullOrWhiteSpace(pdf))
+            {
+                Debug.LogError(
+                    "[PlaySense] PDF Export failed: generated PDF was empty.");
+
+                return null;
+            }
+
+            // -------------------------------------------------
+            // Write file
+            // -------------------------------------------------
+
+            try
+            {
+                File.WriteAllBytes(
+                    outputPath,
+                    Encoding.ASCII.GetBytes(pdf));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    $"[PlaySense] PDF Export failed while writing file:\n{exception}");
+
+                return null;
+            }
 
             Debug.Log(
-                $"PlaySense PDF Report Generated:\n{outputPath}");
+                $"[PlaySense] PDF Report Generated:\n{outputPath}");
 
             return outputPath;
         }
@@ -85,9 +172,9 @@ namespace PlaySense.Export
             float y =
                 PageHeight - MarginTop;
 
-            // -------------------------------------------------
+            // =================================================
             // HEADER
-            // -------------------------------------------------
+            // =================================================
 
             AddText(
                 page,
@@ -107,9 +194,9 @@ namespace PlaySense.Export
 
             y -= 18f;
 
-            // -------------------------------------------------
+            // =================================================
             // SESSION SUMMARY
-            // -------------------------------------------------
+            // =================================================
 
             AddSectionTitle(
                 page,
@@ -133,7 +220,7 @@ namespace PlaySense.Export
             AddText(
                 page,
                 ref y,
-                $"Duration: {session.Metrics.Duration:F2} seconds",
+                $"Duration: {session.Duration:F2} seconds",
                 FontSize,
                 false);
 
@@ -172,9 +259,9 @@ namespace PlaySense.Export
 
             y -= 14f;
 
-            // -------------------------------------------------
+            // =================================================
             // BEHAVIOURAL ANALYSIS
-            // -------------------------------------------------
+            // =================================================
 
             AddSectionTitle(
                 page,
@@ -198,14 +285,14 @@ namespace PlaySense.Export
             AddText(
                 page,
                 ref y,
-                $"Active time: {behaviour.ActivePercentage:F1}%",
+                $"Active percentage: {behaviour.ActivePercentage:F1}%",
                 FontSize,
                 false);
 
             AddText(
                 page,
                 ref y,
-                $"Idle time: {behaviour.IdlePercentage:F1}%",
+                $"Idle percentage: {behaviour.IdlePercentage:F1}%",
                 FontSize,
                 false);
 
@@ -239,9 +326,9 @@ namespace PlaySense.Export
 
             y -= 14f;
 
-            // -------------------------------------------------
+            // =================================================
             // KEY FINDINGS
-            // -------------------------------------------------
+            // =================================================
 
             AddSectionTitle(
                 page,
@@ -260,16 +347,19 @@ namespace PlaySense.Export
             }
             else
             {
-                foreach (string finding
-                         in behaviour.Findings)
+                foreach (string finding in behaviour.Findings)
                 {
+                    if (string.IsNullOrWhiteSpace(finding))
+                        continue;
+
                     List<string> wrapped =
                         WrapText(
-                            "• " + finding,
-                            88);
+                            finding,
+                            84);
 
-                    foreach (string line
-                             in wrapped)
+                    bool firstLine = true;
+
+                    foreach (string line in wrapped)
                     {
                         EnsureSpace(
                             ref page,
@@ -277,21 +367,30 @@ namespace PlaySense.Export
                             pages,
                             30f);
 
+                        string outputLine =
+                            firstLine
+                                ? "- " + line
+                                : "  " + line;
+
                         AddText(
                             page,
                             ref y,
-                            line,
+                            outputLine,
                             FontSize,
                             false);
+
+                        firstLine = false;
                     }
+
+                    y -= 3f;
                 }
             }
 
             y -= 14f;
 
-            // -------------------------------------------------
+            // =================================================
             // GAMEPLAY TIMELINE
-            // -------------------------------------------------
+            // =================================================
 
             AddSectionTitle(
                 page,
@@ -316,6 +415,9 @@ namespace PlaySense.Export
                     GameEventData gameEvent =
                         session.Events[i];
 
+                    if (gameEvent == null)
+                        continue;
+
                     string category =
                         Safe(
                             gameEvent.Category,
@@ -333,12 +435,12 @@ namespace PlaySense.Export
 
                     string line =
                         $"{gameEvent.Timestamp:F2}s   " +
-                        $"{category} → {action}";
+                        $"{category}: {action}";
 
                     if (!string.IsNullOrEmpty(target))
                     {
                         line +=
-                            $" — {target}";
+                            $" - {target}";
                     }
 
                     List<string> wrapped =
@@ -346,8 +448,7 @@ namespace PlaySense.Export
                             line,
                             88);
 
-                    foreach (string wrappedLine
-                             in wrapped)
+                    foreach (string wrappedLine in wrapped)
                     {
                         EnsureSpace(
                             ref page,
@@ -367,9 +468,9 @@ namespace PlaySense.Export
 
             y -= 18f;
 
-            // -------------------------------------------------
+            // =================================================
             // BEHAVIOURAL TIMELINE
-            // -------------------------------------------------
+            // =================================================
 
             EnsureSpace(
                 ref page,
@@ -458,9 +559,9 @@ namespace PlaySense.Export
                 }
             }
 
-            // -------------------------------------------------
+            // =================================================
             // BEHAVIOURAL CONTEXT
-            // -------------------------------------------------
+            // =================================================
 
             EnsureSpace(
                 ref page,
@@ -477,18 +578,10 @@ namespace PlaySense.Export
                 BuildBehaviourContext(
                     behaviour);
 
-            // IMPORTANT:
-            // Wrap the behavioural context paragraph.
-            // Previously this was written as one giant line,
-            // causing the text to run outside the page width.
-
-            List<string> contextLines =
-                WrapText(
-                    behaviourContext,
-                    88);
-
-            foreach (string line
-                     in contextLines)
+            foreach (string line in
+                     WrapText(
+                         behaviourContext,
+                         88))
             {
                 EnsureSpace(
                     ref page,
@@ -506,9 +599,9 @@ namespace PlaySense.Export
 
             y -= 15f;
 
-            // -------------------------------------------------
+            // =================================================
             // FOOTER
-            // -------------------------------------------------
+            // =================================================
 
             EnsureSpace(
                 ref page,
@@ -530,8 +623,7 @@ namespace PlaySense.Export
                 8f,
                 false);
 
-            FinishPage(
-                page);
+            FinishPage(page);
 
             pages.Add(
                 page.ToString());
@@ -548,7 +640,8 @@ namespace PlaySense.Export
         {
             if (behaviour == null)
             {
-                return "Behavioural analysis was unavailable.";
+                return
+                    "Behavioural analysis was unavailable.";
             }
 
             StringBuilder result =
@@ -596,24 +689,35 @@ namespace PlaySense.Export
 
                 result.Append(".");
             }
+            else
+            {
+                result.Append(
+                    "No gameplay events were recorded, so interaction-level behavioural analysis is limited.");
+            }
 
             return result.ToString();
         }
 
         // =====================================================
-        // BEHAVIOURAL OBSERVATION DESCRIPTION
+        // OBSERVATION DESCRIPTION
         // =====================================================
 
         private static string BuildObservationDescription(
             BehaviourObservation observation)
         {
             if (observation == null)
-                return "Behavioural observation was unavailable.";
+            {
+                return
+                    "Behavioural observation was unavailable.";
+            }
 
             string subject =
-                Safe(observation.Subject, "the object");
+                Safe(
+                    observation.Subject,
+                    "the object");
 
-            if (observation.Type == "ObjectAttended")
+            if (observation.Type ==
+                "ObjectAttended")
             {
                 return
                     $"The player visually attended to {subject} " +
@@ -662,8 +766,12 @@ namespace PlaySense.Export
             string safeText =
                 EscapePdfText(text);
 
+            // Current PDF implementation uses Helvetica.
+            // Bold flag is retained for future font support.
+            string fontName = "/F1";
+
             page.AppendLine(
-                $"BT /F1 {fontSize:F1} Tf " +
+                $"BT {fontName} {fontSize:F1} Tf " +
                 $"{MarginLeft:F1} {y:F1} Td " +
                 $"({safeText}) Tj ET");
 
@@ -680,11 +788,14 @@ namespace PlaySense.Export
             List<string> pages,
             float requiredSpace)
         {
-            if (y >= MarginBottom + requiredSpace)
+            if (y >=
+                MarginBottom +
+                requiredSpace)
+            {
                 return;
+            }
 
-            FinishPage(
-                page);
+            FinishPage(page);
 
             pages.Add(
                 page.ToString());
@@ -693,7 +804,8 @@ namespace PlaySense.Export
                 CreatePage();
 
             y =
-                PageHeight - MarginTop;
+                PageHeight -
+                MarginTop;
 
             AddText(
                 page,
@@ -737,12 +849,103 @@ namespace PlaySense.Export
             if (string.IsNullOrEmpty(text))
                 return string.Empty;
 
-            return text
-                .Replace("\\", "\\\\")
-                .Replace("(", "\\(")
-                .Replace(")", "\\)")
-                .Replace("\r", "")
-                .Replace("\n", " ");
+            StringBuilder result =
+                new StringBuilder();
+
+            foreach (char c in text)
+            {
+                switch (c)
+                {
+                    // -----------------------------------------
+                    // PDF special characters
+                    // -----------------------------------------
+
+                    case '\\':
+                        result.Append("\\\\");
+                        break;
+
+                    case '(':
+                        result.Append("\\(");
+                        break;
+
+                    case ')':
+                        result.Append("\\)");
+                        break;
+
+                    // -----------------------------------------
+                    // Whitespace
+                    // -----------------------------------------
+
+                    case '\r':
+                    case '\n':
+                    case '\t':
+                        result.Append(" ");
+                        break;
+
+                    // -----------------------------------------
+                    // Unicode punctuation
+                    // Convert to ASCII equivalents because
+                    // the PDF is currently ASCII/Helvetica.
+                    // -----------------------------------------
+
+                    case '—':
+                    case '–':
+                        result.Append("-");
+                        break;
+
+                    case '“':
+                    case '”':
+                        result.Append("\"");
+                        break;
+
+                    case '‘':
+                    case '’':
+                        result.Append("'");
+                        break;
+
+                    case '•':
+                        result.Append("-");
+                        break;
+
+                    case '→':
+                    case '←':
+                    case '⇒':
+                    case '⇐':
+                        result.Append(">");
+                        break;
+
+                    // -----------------------------------------
+                    // Degree symbol
+                    // -----------------------------------------
+
+                    case '°':
+                        result.Append(" deg");
+                        break;
+
+                    // -----------------------------------------
+                    // Normal ASCII characters
+                    // -----------------------------------------
+
+                    default:
+
+                        if (c >= 32 &&
+                            c <= 126)
+                        {
+                            result.Append(c);
+                        }
+                        else
+                        {
+                            // Ignore unsupported Unicode
+                            // characters instead of corrupting
+                            // the PDF stream.
+                            result.Append("?");
+                        }
+
+                        break;
+                }
+            }
+
+            return result.ToString();
         }
 
         private static string Safe(
@@ -783,13 +986,16 @@ namespace PlaySense.Export
                     continue;
                 }
 
-                if (current.Length + 1 + word.Length
-                    > maxCharacters)
+                if (current.Length +
+                    1 +
+                    word.Length >
+                    maxCharacters)
                 {
                     lines.Add(
                         current.ToString());
 
                     current.Clear();
+
                     current.Append(word);
                 }
                 else
@@ -815,6 +1021,12 @@ namespace PlaySense.Export
         private static string BuildPdf(
             List<string> pages)
         {
+            if (pages == null ||
+                pages.Count == 0)
+            {
+                return null;
+            }
+
             List<string> objects =
                 new List<string>();
 
@@ -834,7 +1046,7 @@ namespace PlaySense.Export
             int nextObjectId = 3;
 
             // -------------------------------------------------
-            // Helvetica font
+            // Object 3: Helvetica font
             // -------------------------------------------------
 
             int fontObjectId =
@@ -847,6 +1059,10 @@ namespace PlaySense.Export
 
             List<int> pageObjectIds =
                 new List<int>();
+
+            // -------------------------------------------------
+            // Create page objects
+            // -------------------------------------------------
 
             foreach (string pageContent in pages)
             {
@@ -861,8 +1077,8 @@ namespace PlaySense.Export
 
                 string contentObject =
                     "<< /Length " +
-                    Encoding.ASCII
-                        .GetByteCount(pageContent) +
+                    Encoding.ASCII.GetByteCount(
+                        pageContent) +
                     " >>\n" +
                     "stream\n" +
                     pageContent +
@@ -902,7 +1118,8 @@ namespace PlaySense.Export
                 string.Join(
                     " ",
                     pageObjectIds.ConvertAll(
-                        id => $"{id} 0 R"));
+                        id =>
+                            $"{id} 0 R"));
 
             objects[1] =
                 "<< /Type /Pages " +
@@ -927,9 +1144,8 @@ namespace PlaySense.Export
                  i++)
             {
                 offsets.Add(
-                    Encoding.ASCII
-                        .GetByteCount(
-                            pdf.ToString()));
+                    Encoding.ASCII.GetByteCount(
+                        pdf.ToString()));
 
                 pdf.AppendLine(
                     $"{i + 1} 0 obj");
@@ -946,9 +1162,8 @@ namespace PlaySense.Export
             // -------------------------------------------------
 
             long xrefPosition =
-                Encoding.ASCII
-                    .GetByteCount(
-                        pdf.ToString());
+                Encoding.ASCII.GetByteCount(
+                    pdf.ToString());
 
             pdf.AppendLine(
                 "xref");

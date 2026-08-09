@@ -95,7 +95,20 @@ namespace PlaySense.Perception
 
         private float _timer;
 
+        // -----------------------------------------------------
+        // IMPORTANT
+        //
+        // This starts on the first Update rather than Awake.
+        // PlaySenseManager starts its recorder in Start().
+        //
+        // Therefore perception and recording begin on the
+        // same gameplay frame instead of having two clocks
+        // starting at different lifecycle points.
+        // -----------------------------------------------------
+
         private float _perceptionStartTime;
+
+        private bool _perceptionClockStarted;
 
         // =====================================================
         // TRACKED OBJECTS
@@ -103,7 +116,7 @@ namespace PlaySense.Perception
 
         private readonly Dictionary<GameObject, PerceptionState>
             _trackedObjects =
-                new Dictionary<GameObject, PerceptionState>();
+            new Dictionary<GameObject, PerceptionState>();
 
         // =====================================================
         // OBSERVATIONS
@@ -111,7 +124,7 @@ namespace PlaySense.Perception
 
         private readonly List<BehaviourObservation>
             _observations =
-                new List<BehaviourObservation>();
+            new List<BehaviourObservation>();
 
         public IReadOnlyList<BehaviourObservation>
             Observations =>
@@ -123,14 +136,14 @@ namespace PlaySense.Perception
 
         private readonly List<AttentionSequenceEntry>
             _attentionSequence =
-                new List<AttentionSequenceEntry>();
+            new List<AttentionSequenceEntry>();
 
         public IReadOnlyList<AttentionSequenceEntry>
             AttentionSequence =>
             _attentionSequence;
 
         // =====================================================
-        // PATTERN STATE
+        // ATTENTION PATTERN STATE
         // =====================================================
 
         private int _attentionSwitchCount;
@@ -140,6 +153,18 @@ namespace PlaySense.Perception
         private GameObject _lastAttendedObject;
 
         private GameObject _previousAttendedObject;
+
+        // =====================================================
+        // CURRENT PRIMARY ATTENTION
+        // =====================================================
+
+        /*
+         * PlaySense can detect many objects simultaneously,
+         * but the player should normally have one primary
+         * attention target at a time.
+         */
+
+        private GameObject _currentAttentionTarget;
 
         // =====================================================
         // INITIALIZATION
@@ -160,9 +185,6 @@ namespace PlaySense.Perception
                 return;
             }
 
-            _perceptionStartTime =
-                Time.realtimeSinceStartup;
-
             RefreshViews();
 
             Debug.Log(
@@ -171,7 +193,9 @@ namespace PlaySense.Perception
             Debug.Log(
                 $"[PlaySense] Views found: {views.Length}");
 
-            foreach (PlaySenseView view in views)
+            foreach (
+                PlaySenseView view
+                in views)
             {
                 if (view == null)
                     continue;
@@ -184,11 +208,34 @@ namespace PlaySense.Perception
         }
 
         // =====================================================
-        // SESSION-RELATIVE PERCEPTION TIME
+        // PERCEPTION CLOCK
+        // =====================================================
+
+        private void StartPerceptionClock()
+        {
+            if (_perceptionClockStarted)
+                return;
+
+            _perceptionStartTime =
+                Time.realtimeSinceStartup;
+
+            _perceptionClockStarted =
+                true;
+
+            if (debugPerception)
+            {
+                Debug.Log(
+                    "[PlaySense] Perception clock started.");
+            }
+        }
+
         // =====================================================
 
         private float PerceptionTime()
         {
+            if (!_perceptionClockStarted)
+                return 0f;
+
             return
                 Time.realtimeSinceStartup -
                 _perceptionStartTime;
@@ -229,7 +276,10 @@ namespace PlaySense.Perception
             if (_agent == null)
                 return;
 
-            _timer += Time.deltaTime;
+            StartPerceptionClock();
+
+            _timer +=
+                Time.unscaledDeltaTime;
 
             float interval =
                 1f /
@@ -272,7 +322,9 @@ namespace PlaySense.Perception
             HashSet<GameObject> currentObjects =
                 new HashSet<GameObject>();
 
-            foreach (Collider collider in colliders)
+            foreach (
+                Collider collider
+                in colliders)
             {
                 if (collider == null)
                     continue;
@@ -342,7 +394,9 @@ namespace PlaySense.Perception
             // TEST EVERY AVAILABLE VIEW
             // -------------------------------------------------
 
-            foreach (PlaySenseView view in views)
+            foreach (
+                PlaySenseView view
+                in views)
             {
                 if (view == null)
                     continue;
@@ -562,7 +616,9 @@ namespace PlaySense.Perception
                     state,
                     bestView);
 
-            if (debugPerception && visible)
+            if (
+                debugPerception &&
+                visible)
             {
                 Debug.Log(
                     $"[PlaySense] VISIBLE: " +
@@ -663,7 +719,19 @@ namespace PlaySense.Perception
                     sampleRate,
                     0.01f);
 
-            foreach (var pair in _trackedObjects)
+            // -------------------------------------------------
+            // FIND BEST CURRENT CANDIDATE
+            // -------------------------------------------------
+
+            GameObject bestCandidate =
+                null;
+
+            float bestScore =
+                -1f;
+
+            foreach (
+                var pair
+                in _trackedObjects)
             {
                 GameObject target =
                     pair.Key;
@@ -671,32 +739,67 @@ namespace PlaySense.Perception
                 PerceptionState state =
                     pair.Value;
 
-                if (state.AttentionCandidate)
-                {
-                    state.AttentionTime +=
-                        deltaTime;
-
-                    if (!state.IsAttending &&
-                        state.AttentionTime >=
-                        minimumAttentionTime)
-                    {
-                        BeginAttention(
-                            target,
-                            state);
-                    }
-
+                if (!state.AttentionCandidate)
                     continue;
-                }
 
-                if (state.IsAttending)
+                if (state.AttentionScore >
+                    bestScore)
                 {
-                    EndAttention(
-                        target,
-                        state);
+                    bestScore =
+                        state.AttentionScore;
+
+                    bestCandidate =
+                        target;
+                }
+            }
+
+            // -------------------------------------------------
+            // NO CURRENT CANDIDATE
+            // -------------------------------------------------
+
+            if (bestCandidate == null)
+            {
+                if (_currentAttentionTarget != null)
+                {
+                    EndCurrentAttention();
                 }
 
-                state.AttentionTime =
-                    0f;
+                return;
+            }
+
+            // -------------------------------------------------
+            // TARGET CHANGED
+            // -------------------------------------------------
+
+            if (
+                _currentAttentionTarget != null &&
+                _currentAttentionTarget != bestCandidate)
+            {
+                EndCurrentAttention();
+            }
+
+            // -------------------------------------------------
+            // START / CONTINUE TARGET
+            // -------------------------------------------------
+
+            _currentAttentionTarget =
+                bestCandidate;
+
+            PerceptionState currentState =
+                _trackedObjects[
+                    bestCandidate];
+
+            currentState.AttentionTime +=
+                deltaTime;
+
+            if (
+                !currentState.IsAttending &&
+                currentState.AttentionTime >=
+                minimumAttentionTime)
+            {
+                BeginAttention(
+                    bestCandidate,
+                    currentState);
             }
         }
 
@@ -708,6 +811,12 @@ namespace PlaySense.Perception
             GameObject target,
             PerceptionState state)
         {
+            if (target == null ||
+                state == null)
+            {
+                return;
+            }
+
             state.IsAttending =
                 true;
 
@@ -764,13 +873,19 @@ namespace PlaySense.Perception
                         state.ViewName,
 
                     IsReinspection =
-                        HasPreviouslyAttended(target)
+                        HasPreviouslyAttended(
+                            target)
                 };
 
             _attentionSequence.Add(
                 entry);
 
-            if (_previousAttendedObject != null &&
+            // -------------------------------------------------
+            // SWITCH DETECTION
+            // -------------------------------------------------
+
+            if (
+                _previousAttendedObject != null &&
                 _previousAttendedObject != target)
             {
                 _attentionSwitchCount++;
@@ -801,6 +916,39 @@ namespace PlaySense.Perception
         }
 
         // =====================================================
+        // END CURRENT ATTENTION
+        // =====================================================
+
+        private void EndCurrentAttention()
+        {
+            if (_currentAttentionTarget == null)
+                return;
+
+            GameObject target =
+                _currentAttentionTarget;
+
+            if (_trackedObjects.TryGetValue(
+                    target,
+                    out PerceptionState state))
+            {
+                if (state.IsAttending)
+                {
+                    EndAttention(
+                        target,
+                        state);
+                }
+                else
+                {
+                    state.AttentionTime =
+                        0f;
+                }
+            }
+
+            _currentAttentionTarget =
+                null;
+        }
+
+        // =====================================================
         // END ATTENTION
         // =====================================================
 
@@ -808,6 +956,12 @@ namespace PlaySense.Perception
             GameObject target,
             PerceptionState state)
         {
+            if (target == null ||
+                state == null)
+            {
+                return;
+            }
+
             float now =
                 PerceptionTime();
 
@@ -815,7 +969,17 @@ namespace PlaySense.Perception
                 now -
                 state.AttentionStartTime;
 
-            if (duration >=
+            duration =
+                Mathf.Max(
+                    duration,
+                    0f);
+
+            // -------------------------------------------------
+            // CREATE BEHAVIOUR OBSERVATION
+            // -------------------------------------------------
+
+            if (
+                duration >=
                 minimumAttentionTime)
             {
                 CreateObservation(
@@ -825,9 +989,7 @@ namespace PlaySense.Perception
             }
 
             state.TotalAttentionDuration +=
-                Mathf.Max(
-                    duration,
-                    0f);
+                duration;
 
             state.LastAttentionEndTime =
                 now;
@@ -845,7 +1007,8 @@ namespace PlaySense.Perception
                     _attentionSequence[
                         _attentionSequence.Count - 1];
 
-                if (entry.ObjectName ==
+                if (
+                    entry.ObjectName ==
                     target.name &&
                     entry.EndTime < 0f)
                 {
@@ -858,16 +1021,18 @@ namespace PlaySense.Perception
             }
 
             // -------------------------------------------------
-            // PATTERN LOGGING
+            // SUSTAINED ATTENTION
             // -------------------------------------------------
 
-            if (duration >=
+            if (
+                duration >=
                 sustainedAttentionTime)
             {
                 if (debugPatterns)
                 {
                     Debug.Log(
-                        $"[PlaySense] SUSTAINED ATTENTION: " +
+                        $"[PlaySense] " +
+                        $"SUSTAINED ATTENTION: " +
                         $"{target.name} | " +
                         $"{duration:F2}s");
                 }
@@ -876,10 +1041,16 @@ namespace PlaySense.Perception
             if (debugAttention)
             {
                 Debug.Log(
-                    $"[PlaySense] ATTENTION ENDED: " +
+                    $"[PlaySense] " +
+                    $"ATTENTION ENDED: " +
                     $"{target.name} | " +
-                    $"Duration: {duration:F2}s");
+                    $"Duration: " +
+                    $"{duration:F2}s");
             }
+
+            // -------------------------------------------------
+            // RESET STATE
+            // -------------------------------------------------
 
             state.IsAttending =
                 false;
@@ -925,9 +1096,8 @@ namespace PlaySense.Perception
                 if (debugPatterns)
                 {
                     Debug.Log(
-                        $"[PlaySense] ATTENTION PATTERN: " +
-                        $"rapid environmental scanning " +
-                        $"detected.");
+                        "[PlaySense] ATTENTION PATTERN: " +
+                        "rapid environmental scanning detected.");
                 }
 
                 _attentionSwitchCount = 0;
@@ -944,11 +1114,13 @@ namespace PlaySense.Perception
             if (target == null)
                 return false;
 
-            for (int i = 0;
-                 i < _attentionSequence.Count;
-                 i++)
+            for (
+                int i = 0;
+                i < _attentionSequence.Count;
+                i++)
             {
-                if (_attentionSequence[i].ObjectName ==
+                if (
+                    _attentionSequence[i].ObjectName ==
                     target.name)
                 {
                     return true;
@@ -967,8 +1139,11 @@ namespace PlaySense.Perception
             PerceptionState state,
             float duration)
         {
-            if (target == null)
+            if (target == null ||
+                state == null)
+            {
                 return;
+            }
 
             BehaviourObservation observation =
                 new BehaviourObservation
@@ -1010,7 +1185,8 @@ namespace PlaySense.Perception
             if (debugAttention)
             {
                 Debug.Log(
-                    $"[PlaySense] OBSERVATION CREATED: " +
+                    $"[PlaySense] " +
+                    $"OBSERVATION CREATED: " +
                     $"{target.name} | " +
                     $"Start: " +
                     $"{observation.Timestamp:F2}s | " +
@@ -1091,7 +1267,8 @@ namespace PlaySense.Perception
 
             while (current != null)
             {
-                if (current.gameObject ==
+                if (
+                    current.gameObject ==
                     target)
                 {
                     return true;
@@ -1114,9 +1291,12 @@ namespace PlaySense.Perception
             List<GameObject> toRemove =
                 new List<GameObject>();
 
-            foreach (var pair in _trackedObjects)
+            foreach (
+                var pair
+                in _trackedObjects)
             {
-                if (currentObjects.Contains(
+                if (
+                    currentObjects.Contains(
                         pair.Key))
                 {
                     continue;
@@ -1127,17 +1307,74 @@ namespace PlaySense.Perception
                     EndAttention(
                         pair.Key,
                         pair.Value);
+
+                    if (
+                        _currentAttentionTarget ==
+                        pair.Key)
+                    {
+                        _currentAttentionTarget =
+                            null;
+                    }
                 }
 
                 toRemove.Add(
                     pair.Key);
             }
 
-            foreach (GameObject target in toRemove)
+            foreach (
+                GameObject target
+                in toRemove)
             {
                 _trackedObjects.Remove(
                     target);
             }
+        }
+
+        // =====================================================
+        // FINALIZE ATTENTION
+        // =====================================================
+
+        private void OnDisable()
+        {
+            FinalizeAttention();
+        }
+
+        // =====================================================
+
+        private void OnDestroy()
+        {
+            FinalizeAttention();
+        }
+
+        // =====================================================
+
+        private void FinalizeAttention()
+        {
+            if (_currentAttentionTarget != null)
+            {
+                EndCurrentAttention();
+            }
+
+            /*
+             * Safety fallback:
+             * If some state is still marked attending but the
+             * primary target reference was lost, close it too.
+             */
+
+            foreach (
+                var pair
+                in _trackedObjects)
+            {
+                if (!pair.Value.IsAttending)
+                    continue;
+
+                EndAttention(
+                    pair.Key,
+                    pair.Value);
+            }
+
+            _currentAttentionTarget =
+                null;
         }
 
         // =====================================================
@@ -1150,7 +1387,8 @@ namespace PlaySense.Perception
             if (target == null)
                 return false;
 
-            if (!_trackedObjects.TryGetValue(
+            if (
+                !_trackedObjects.TryGetValue(
                     target,
                     out PerceptionState state))
             {
@@ -1168,7 +1406,8 @@ namespace PlaySense.Perception
             if (target == null)
                 return 0f;
 
-            if (!_trackedObjects.TryGetValue(
+            if (
+                !_trackedObjects.TryGetValue(
                     target,
                     out PerceptionState state))
             {
@@ -1186,7 +1425,8 @@ namespace PlaySense.Perception
             if (target == null)
                 return 0f;
 
-            if (!_trackedObjects.TryGetValue(
+            if (
+                !_trackedObjects.TryGetValue(
                     target,
                     out PerceptionState state))
             {
@@ -1204,7 +1444,8 @@ namespace PlaySense.Perception
             if (target == null)
                 return 0f;
 
-            if (!_trackedObjects.TryGetValue(
+            if (
+                !_trackedObjects.TryGetValue(
                     target,
                     out PerceptionState state))
             {
@@ -1222,21 +1463,25 @@ namespace PlaySense.Perception
             if (target == null)
                 return 0f;
 
-            if (!_trackedObjects.TryGetValue(
+            if (
+                !_trackedObjects.TryGetValue(
                     target,
                     out PerceptionState state))
             {
                 return 0f;
             }
 
+            float currentDuration =
+                state.IsAttending
+                    ? Mathf.Max(
+                        0f,
+                        PerceptionTime() -
+                        state.AttentionStartTime)
+                    : 0f;
+
             return
                 state.TotalAttentionDuration +
-                (
-                    state.IsAttending
-                        ? PerceptionTime() -
-                          state.AttentionStartTime
-                        : 0f
-                );
+                currentDuration;
         }
 
         // -----------------------------------------------------
@@ -1247,7 +1492,8 @@ namespace PlaySense.Perception
             if (target == null)
                 return 0;
 
-            if (!_trackedObjects.TryGetValue(
+            if (
+                !_trackedObjects.TryGetValue(
                     target,
                     out PerceptionState state))
             {
@@ -1265,7 +1511,8 @@ namespace PlaySense.Perception
             if (target == null)
                 return false;
 
-            if (!_trackedObjects.TryGetValue(
+            if (
+                !_trackedObjects.TryGetValue(
                     target,
                     out PerceptionState state))
             {
@@ -1283,7 +1530,8 @@ namespace PlaySense.Perception
             if (target == null)
                 return string.Empty;
 
-            if (!_trackedObjects.TryGetValue(
+            if (
+                !_trackedObjects.TryGetValue(
                     target,
                     out PerceptionState state))
             {

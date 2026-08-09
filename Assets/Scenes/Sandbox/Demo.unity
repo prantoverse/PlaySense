@@ -312,6 +312,7 @@ GameObject:
   - component: {fileID: 747442597}
   - component: {fileID: 747442598}
   - component: {fileID: 747442599}
+  - component: {fileID: 747442600}
   m_Layer: 0
   m_Name: Cube
   m_TagString: Untagged
@@ -456,10 +457,33 @@ MonoBehaviour:
     m_Bits: 4294967295
   attentionAngle: 15
   minimumAttentionTime: 0.5
+  sustainedAttentionTime: 3
+  useDistanceInAttentionScore: 1
+  attentionDistanceWeight: 0.25
+  attentionAngleWeight: 0.75
   sampleRate: 10
   autoDiscoverViews: 1
   views: []
   debugPerception: 1
+  debugAttention: 1
+  debugPatterns: 1
+--- !u!114 &747442600
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 747442592}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9346a81b072ac47459766424c1468eb9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlaySense.Behaviour.PlaySenseBehaviourInterpreter
+  shortAttentionThreshold: 1
+  sustainedAttentionThreshold: 3
+  reinspectionGapThreshold: 5
+  rapidSwitchGapThreshold: 1.5
+  debugInterpretation: 1
 --- !u!1 &883572464
 GameObject:
   m_ObjectHideFlags: 0
@@ -3131,9 +3155,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlaySense.Perception.PlaySenseView
   activeView: 1
-  fieldOfView: 90
-  nearClip: 0.05
-  farClip: 100
+  fallbackFieldOfView: 90
+  fallbackNearClip: 0.05
+  fallbackFarClip: 100
   viewType: 0
 --- !u!114 &1306353029
 MonoBehaviour:
