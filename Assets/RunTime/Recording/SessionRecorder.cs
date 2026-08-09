@@ -1,10 +1,9 @@
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-
+using PlaySense.Core;
 using PlaySense.Data.Models;
 using PlaySense.Reporting;
-using PlaySense.Core;
 
 namespace PlaySense.Recording
 {
@@ -12,8 +11,8 @@ namespace PlaySense.Recording
     {
         private SessionData _session;
 
-        // PlaySense's own session clock.
-        private float _sessionStartTime;
+        // PlaySense-owned session clock.
+        private double _elapsedTime;
 
         private bool _isRecording;
 
@@ -27,22 +26,8 @@ namespace PlaySense.Recording
         public bool IsRecording =>
             _isRecording;
 
-        public float ElapsedTime
-        {
-            get
-            {
-                if (!_isRecording)
-                {
-                    if (_session != null)
-                        return _session.Duration;
-
-                    return 0f;
-                }
-
-                return Time.realtimeSinceStartup -
-                       _sessionStartTime;
-            }
-        }
+        public float ElapsedTime =>
+            (float)_elapsedTime;
 
         // =====================================================
         // START
@@ -62,14 +47,35 @@ namespace PlaySense.Recording
             _session.Duration =
                 0f;
 
-            _sessionStartTime =
-                Time.realtimeSinceStartup;
+            _elapsedTime =
+                0.0;
 
             _isRecording =
                 true;
 
             Debug.Log(
                 "[PlaySense] Session clock started.");
+        }
+
+        // =====================================================
+        // CLOCK
+        // =====================================================
+
+        /// <summary>
+        /// Advances PlaySense's own session clock.
+        /// Uses unscaled time so the telemetry clock is
+        /// independent of Time.timeScale.
+        /// </summary>
+        public void Tick(float unscaledDeltaTime)
+        {
+            if (!_isRecording)
+                return;
+
+            if (unscaledDeltaTime < 0f)
+                return;
+
+            _elapsedTime +=
+                unscaledDeltaTime;
         }
 
         // =====================================================
@@ -158,11 +164,6 @@ namespace PlaySense.Recording
                 return;
             }
 
-            // Make sure the observation uses
-            // PlaySense's session timeline.
-            observation.Timestamp =
-                observation.Timestamp;
-
             _session.BehaviourObservations.Add(
                 observation);
 
@@ -186,16 +187,11 @@ namespace PlaySense.Recording
             if (!_isRecording)
                 return _session;
 
-            // Capture the final session time BEFORE
-            // disabling the recording state.
-            float finalDuration =
-                Time.realtimeSinceStartup -
-                _sessionStartTime;
-
+            // Freeze the exact PlaySense-owned duration.
             _session.Duration =
                 Mathf.Max(
                     0f,
-                    finalDuration);
+                    ElapsedTime);
 
             _session.SceneName =
                 SceneManager.GetActiveScene().name;
@@ -203,13 +199,28 @@ namespace PlaySense.Recording
             _isRecording =
                 false;
 
-            // Analyse the completed session.
+            // -------------------------------------------------
+            // ANALYSE COMPLETED SESSION
+            // -------------------------------------------------
+
             SessionAnalyzer analyzer =
                 new SessionAnalyzer();
 
             _session.Metrics =
                 analyzer.Analyze(
                     _session);
+
+            // -------------------------------------------------
+            // IMPORTANT:
+            // Make sure metrics use the authoritative
+            // PlaySense session duration.
+            // -------------------------------------------------
+
+            if (_session.Metrics != null)
+            {
+                _session.Metrics.Duration =
+                    _session.Duration;
+            }
 
             Debug.Log(
                 $"[PlaySense] Session clock stopped: " +

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,42 +9,105 @@ namespace PlaySense.Perception
 {
     public class PlaySensePerception : MonoBehaviour
     {
+        // =====================================================
+        // DETECTION
+        // =====================================================
+
         [Header("Detection")]
+
         [SerializeField]
         private float detectionRadius = 25f;
 
         [SerializeField]
         private LayerMask detectionLayers = ~0;
 
+        // =====================================================
+        // ATTENTION
+        // =====================================================
+
         [Header("Attention")]
+
         [SerializeField]
         private float attentionAngle = 15f;
 
         [SerializeField]
         private float minimumAttentionTime = 0.5f;
 
+        [SerializeField]
+        private float sustainedAttentionTime = 3f;
+
+        // =====================================================
+        // ATTENTION SCORING
+        // =====================================================
+
+        [Header("Attention Scoring")]
+
+        [SerializeField]
+        private bool useDistanceInAttentionScore = true;
+
+        [SerializeField]
+        private float attentionDistanceWeight = 0.25f;
+
+        [SerializeField]
+        private float attentionAngleWeight = 0.75f;
+
+        // =====================================================
+        // SAMPLING
+        // =====================================================
+
         [Header("Sampling")]
+
         [SerializeField]
         private float sampleRate = 10f;
 
+        // =====================================================
+        // VIEWS
+        // =====================================================
+
         [Header("Views")]
+
         [SerializeField]
         private bool autoDiscoverViews = true;
 
         [SerializeField]
         private PlaySenseView[] views;
 
+        // =====================================================
+        // DIAGNOSTICS
+        // =====================================================
+
         [Header("Diagnostics")]
+
         [SerializeField]
         private bool debugPerception = true;
+
+        [SerializeField]
+        private bool debugAttention = true;
+
+        [SerializeField]
+        private bool debugPatterns = true;
+
+        // =====================================================
+        // INTERNAL REFERENCES
+        // =====================================================
 
         private PlaySenseAgent _agent;
 
         private float _timer;
 
+        private float _perceptionStartTime;
+
+        // =====================================================
+        // TRACKED OBJECTS
+        // =====================================================
+
         private readonly Dictionary<GameObject, PerceptionState>
             _trackedObjects =
                 new Dictionary<GameObject, PerceptionState>();
+
+        // =====================================================
+        // OBSERVATIONS
+        // =====================================================
 
         private readonly List<BehaviourObservation>
             _observations =
@@ -52,6 +116,30 @@ namespace PlaySense.Perception
         public IReadOnlyList<BehaviourObservation>
             Observations =>
             _observations;
+
+        // =====================================================
+        // ATTENTION SEQUENCE
+        // =====================================================
+
+        private readonly List<AttentionSequenceEntry>
+            _attentionSequence =
+                new List<AttentionSequenceEntry>();
+
+        public IReadOnlyList<AttentionSequenceEntry>
+            AttentionSequence =>
+            _attentionSequence;
+
+        // =====================================================
+        // PATTERN STATE
+        // =====================================================
+
+        private int _attentionSwitchCount;
+
+        private float _lastAttentionEndTime;
+
+        private GameObject _lastAttendedObject;
+
+        private GameObject _previousAttendedObject;
 
         // =====================================================
         // INITIALIZATION
@@ -71,6 +159,9 @@ namespace PlaySense.Perception
                 enabled = false;
                 return;
             }
+
+            _perceptionStartTime =
+                Time.realtimeSinceStartup;
 
             RefreshViews();
 
@@ -93,21 +184,40 @@ namespace PlaySense.Perception
         }
 
         // =====================================================
+        // SESSION-RELATIVE PERCEPTION TIME
+        // =====================================================
+
+        private float PerceptionTime()
+        {
+            return
+                Time.realtimeSinceStartup -
+                _perceptionStartTime;
+        }
+
+        // =====================================================
         // VIEW DISCOVERY
         // =====================================================
 
         private void RefreshViews()
         {
             if (!autoDiscoverViews)
+            {
+                if (views == null)
+                    views =
+                        new PlaySenseView[0];
+
                 return;
+            }
 
             views =
                 FindObjectsByType<PlaySenseView>(
                     FindObjectsSortMode.None);
 
             if (views == null)
+            {
                 views =
                     new PlaySenseView[0];
+            }
         }
 
         // =====================================================
@@ -122,7 +232,8 @@ namespace PlaySense.Perception
             _timer += Time.deltaTime;
 
             float interval =
-                1f / Mathf.Max(
+                1f /
+                Mathf.Max(
                     sampleRate,
                     0.01f);
 
@@ -132,7 +243,10 @@ namespace PlaySense.Perception
             _timer = 0f;
 
             ScanEnvironment();
+
             UpdateAttention();
+
+            UpdateAttentionPatterns();
         }
 
         // =====================================================
@@ -169,7 +283,8 @@ namespace PlaySense.Perception
                 if (target == gameObject)
                     continue;
 
-                currentObjects.Add(target);
+                currentObjects.Add(
+                    target);
 
                 if (debugPerception)
                 {
@@ -195,8 +310,21 @@ namespace PlaySense.Perception
             if (target == null)
                 return;
 
-            bool visible =
-                false;
+            if (!_trackedObjects.ContainsKey(target))
+            {
+                _trackedObjects.Add(
+                    target,
+                    new PerceptionState());
+            }
+
+            PerceptionState state =
+                _trackedObjects[target];
+
+            // -------------------------------------------------
+            // RESET CURRENT VIEW STATE
+            // -------------------------------------------------
+
+            bool visible = false;
 
             float bestDistance =
                 float.MaxValue;
@@ -206,6 +334,13 @@ namespace PlaySense.Perception
 
             bool bestUnobstructed =
                 false;
+
+            PlaySenseView bestView =
+                null;
+
+            // -------------------------------------------------
+            // TEST EVERY AVAILABLE VIEW
+            // -------------------------------------------------
 
             foreach (PlaySenseView view in views)
             {
@@ -234,16 +369,12 @@ namespace PlaySense.Perception
                 float distance =
                     offset.magnitude;
 
-                if (debugPerception)
-                {
-                    Debug.Log(
-                        $"[PlaySense] Checking " +
-                        $"{target.name} from {view.name} | " +
-                        $"Distance: {distance:F2}");
-                }
-
                 if (distance <= 0.01f)
                     continue;
+
+                // -------------------------------------------------
+                // FAR CLIP
+                // -------------------------------------------------
 
                 if (distance >
                     view.FarClip)
@@ -258,18 +389,24 @@ namespace PlaySense.Perception
                     continue;
                 }
 
+                // -------------------------------------------------
+                // FOV
+                // -------------------------------------------------
+
                 float angle =
                     Vector3.Angle(
                         view.Forward,
                         offset);
 
                 float effectiveFov =
-                    view.FieldOfView * 0.5f;
+                    view.FieldOfView *
+                    0.5f;
 
                 if (debugPerception)
                 {
                     Debug.Log(
                         $"[PlaySense] {target.name} | " +
+                        $"View: {view.name} | " +
                         $"Angle: {angle:F2} | " +
                         $"FOV half: {effectiveFov:F2}");
                 }
@@ -286,6 +423,10 @@ namespace PlaySense.Perception
 
                     continue;
                 }
+
+                // -------------------------------------------------
+                // OCCLUSION
+                // -------------------------------------------------
 
                 bool unobstructed =
                     IsUnobstructed(
@@ -308,6 +449,10 @@ namespace PlaySense.Perception
 
                 visible = true;
 
+                // -------------------------------------------------
+                // BEST VIEW
+                // -------------------------------------------------
+
                 if (angle < bestAngle)
                 {
                     bestAngle =
@@ -318,18 +463,30 @@ namespace PlaySense.Perception
 
                     bestUnobstructed =
                         true;
+
+                    bestView =
+                        view;
                 }
             }
 
-            if (!_trackedObjects.ContainsKey(target))
-            {
-                _trackedObjects.Add(
-                    target,
-                    new PerceptionState());
-            }
+            // =====================================================
+            // UPDATE PERCEPTION STATE
+            // =====================================================
 
-            PerceptionState state =
-                _trackedObjects[target];
+            float now =
+                PerceptionTime();
+
+            bool wasVisible =
+                state.Visible;
+
+            state.Position =
+                target.transform.position;
+
+            state.Direction =
+                (
+                    target.transform.position -
+                    transform.position
+                ).normalized;
 
             state.Distance =
                 visible
@@ -347,29 +504,162 @@ namespace PlaySense.Perception
             state.Unobstructed =
                 bestUnobstructed;
 
-            state.AttentionCandidate =
-                visible &&
-                bestAngle <= attentionAngle;
+            state.BestView =
+                bestView;
+
+            state.ViewName =
+                bestView != null
+                    ? bestView.name
+                    : string.Empty;
+
+            // =====================================================
+            // VISIBILITY HISTORY
+            // =====================================================
 
             if (visible)
+            {
+                if (!wasVisible)
+                {
+                    state.FirstSeenTime =
+                        now;
+
+                    if (debugPerception)
+                    {
+                        Debug.Log(
+                            $"[PlaySense] FIRST SEEN: " +
+                            $"{target.name} at {now:F2}s");
+                    }
+                }
+
+                state.LastSeenTime =
+                    now;
+
+                state.VisibleDuration +=
+                    1f /
+                    Mathf.Max(
+                        sampleRate,
+                        0.01f);
+            }
+
+            state.WasVisibleLastFrame =
+                visible;
+
+            // =====================================================
+            // ATTENTION CANDIDATE
+            // =====================================================
+
+            state.AttentionCandidate =
+                visible &&
+                bestUnobstructed &&
+                bestAngle <= attentionAngle;
+
+            // =====================================================
+            // ATTENTION SCORE
+            // =====================================================
+
+            state.AttentionScore =
+                CalculateAttentionScore(
+                    state,
+                    bestView);
+
+            if (debugPerception && visible)
             {
                 Debug.Log(
                     $"[PlaySense] VISIBLE: " +
                     $"{target.name} | " +
-                    $"Angle: {bestAngle:F1}° | " +
-                    $"Distance: {bestDistance:F1}m | " +
-                    $"Attention: {state.AttentionCandidate}");
+                    $"View: {state.ViewName} | " +
+                    $"Distance: {state.Distance:F2}m | " +
+                    $"Angle: {state.Angle:F1}° | " +
+                    $"Score: {state.AttentionScore:F2} | " +
+                    $"Attention Candidate: " +
+                    $"{state.AttentionCandidate}");
             }
         }
 
         // =====================================================
-        // ATTENTION
+        // ATTENTION SCORE
+        // =====================================================
+
+        private float CalculateAttentionScore(
+            PerceptionState state,
+            PlaySenseView view)
+        {
+            if (!state.Visible ||
+                !state.Unobstructed ||
+                view == null)
+            {
+                return 0f;
+            }
+
+            // -------------------------------------------------
+            // ANGLE SCORE
+            // -------------------------------------------------
+
+            float angleScore =
+                Mathf.InverseLerp(
+                    attentionAngle,
+                    0f,
+                    state.Angle);
+
+            // -------------------------------------------------
+            // DISTANCE SCORE
+            // -------------------------------------------------
+
+            float distanceScore =
+                1f;
+
+            if (useDistanceInAttentionScore)
+            {
+                float maxDistance =
+                    Mathf.Max(
+                        view.FarClip,
+                        0.01f);
+
+                distanceScore =
+                    Mathf.Clamp01(
+                        1f -
+                        (
+                            state.Distance /
+                            maxDistance
+                        ));
+            }
+
+            // -------------------------------------------------
+            // WEIGHTED SCORE
+            // -------------------------------------------------
+
+            float totalWeight =
+                Mathf.Max(
+                    attentionAngleWeight +
+                    attentionDistanceWeight,
+                    0.01f);
+
+            float score =
+                (
+                    angleScore *
+                    attentionAngleWeight
+                )
+                +
+                (
+                    distanceScore *
+                    attentionDistanceWeight
+                );
+
+            return
+                Mathf.Clamp01(
+                    score /
+                    totalWeight);
+        }
+
+        // =====================================================
+        // ATTENTION UPDATE
         // =====================================================
 
         private void UpdateAttention()
         {
             float deltaTime =
-                1f / Mathf.Max(
+                1f /
+                Mathf.Max(
                     sampleRate,
                     0.01f);
 
@@ -405,7 +695,8 @@ namespace PlaySense.Perception
                         state);
                 }
 
-                state.AttentionTime = 0f;
+                state.AttentionTime =
+                    0f;
             }
         }
 
@@ -417,10 +708,11 @@ namespace PlaySense.Perception
             GameObject target,
             PerceptionState state)
         {
-            state.IsAttending = true;
+            state.IsAttending =
+                true;
 
             state.AttentionStartTime =
-                Time.time -
+                PerceptionTime() -
                 state.AttentionTime;
 
             state.AttentionStartDistance =
@@ -429,9 +721,83 @@ namespace PlaySense.Perception
             state.AttentionStartAngle =
                 state.Angle;
 
-            Debug.Log(
-                $"[PlaySense] ATTENTION STARTED: " +
-                $"{target.name}");
+            state.AttentionStartScore =
+                state.AttentionScore;
+
+            state.AttentionCount++;
+
+            // -------------------------------------------------
+            // ATTENTION SEQUENCE
+            // -------------------------------------------------
+
+            _previousAttendedObject =
+                _lastAttendedObject;
+
+            _lastAttendedObject =
+                target;
+
+            AttentionSequenceEntry entry =
+                new AttentionSequenceEntry
+                {
+                    ObjectName =
+                        target.name,
+
+                    StartTime =
+                        state.AttentionStartTime,
+
+                    EndTime =
+                        -1f,
+
+                    Duration =
+                        0f,
+
+                    Distance =
+                        state.AttentionStartDistance,
+
+                    Angle =
+                        state.AttentionStartAngle,
+
+                    AttentionScore =
+                        state.AttentionStartScore,
+
+                    ViewName =
+                        state.ViewName,
+
+                    IsReinspection =
+                        HasPreviouslyAttended(target)
+                };
+
+            _attentionSequence.Add(
+                entry);
+
+            if (_previousAttendedObject != null &&
+                _previousAttendedObject != target)
+            {
+                _attentionSwitchCount++;
+
+                float gap =
+                    PerceptionTime() -
+                    _lastAttentionEndTime;
+
+                if (debugPatterns)
+                {
+                    Debug.Log(
+                        $"[PlaySense] ATTENTION SWITCH: " +
+                        $"{_previousAttendedObject.name} → " +
+                        $"{target.name} | " +
+                        $"Gap: {gap:F2}s");
+                }
+            }
+
+            if (debugAttention)
+            {
+                Debug.Log(
+                    $"[PlaySense] ATTENTION STARTED: " +
+                    $"{target.name} | " +
+                    $"Score: {state.AttentionScore:F2} | " +
+                    $"Distance: {state.Distance:F2}m | " +
+                    $"Angle: {state.Angle:F1}°");
+            }
         }
 
         // =====================================================
@@ -442,8 +808,11 @@ namespace PlaySense.Perception
             GameObject target,
             PerceptionState state)
         {
+            float now =
+                PerceptionTime();
+
             float duration =
-                Time.time -
+                now -
                 state.AttentionStartTime;
 
             if (duration >=
@@ -455,16 +824,138 @@ namespace PlaySense.Perception
                     duration);
             }
 
-            Debug.Log(
-                $"[PlaySense] ATTENTION ENDED: " +
-                $"{target.name} | " +
-                $"Duration: {duration:F2}s");
+            state.TotalAttentionDuration +=
+                Mathf.Max(
+                    duration,
+                    0f);
 
-            state.IsAttending = false;
+            state.LastAttentionEndTime =
+                now;
 
-            state.AttentionStartTime = 0f;
+            _lastAttentionEndTime =
+                now;
 
-            state.AttentionTime = 0f;
+            // -------------------------------------------------
+            // CLOSE SEQUENCE ENTRY
+            // -------------------------------------------------
+
+            if (_attentionSequence.Count > 0)
+            {
+                AttentionSequenceEntry entry =
+                    _attentionSequence[
+                        _attentionSequence.Count - 1];
+
+                if (entry.ObjectName ==
+                    target.name &&
+                    entry.EndTime < 0f)
+                {
+                    entry.EndTime =
+                        now;
+
+                    entry.Duration =
+                        duration;
+                }
+            }
+
+            // -------------------------------------------------
+            // PATTERN LOGGING
+            // -------------------------------------------------
+
+            if (duration >=
+                sustainedAttentionTime)
+            {
+                if (debugPatterns)
+                {
+                    Debug.Log(
+                        $"[PlaySense] SUSTAINED ATTENTION: " +
+                        $"{target.name} | " +
+                        $"{duration:F2}s");
+                }
+            }
+
+            if (debugAttention)
+            {
+                Debug.Log(
+                    $"[PlaySense] ATTENTION ENDED: " +
+                    $"{target.name} | " +
+                    $"Duration: {duration:F2}s");
+            }
+
+            state.IsAttending =
+                false;
+
+            state.AttentionStartTime =
+                0f;
+
+            state.AttentionTime =
+                0f;
+
+            state.AttentionStartDistance =
+                0f;
+
+            state.AttentionStartAngle =
+                0f;
+
+            state.AttentionStartScore =
+                0f;
+        }
+
+        // =====================================================
+        // ATTENTION PATTERNS
+        // =====================================================
+
+        private void UpdateAttentionPatterns()
+        {
+            if (_attentionSequence.Count < 2)
+                return;
+
+            AttentionSequenceEntry latest =
+                _attentionSequence[
+                    _attentionSequence.Count - 1];
+
+            if (latest.EndTime < 0f)
+                return;
+
+            // -------------------------------------------------
+            // RAPID SWITCHING
+            // -------------------------------------------------
+
+            if (_attentionSwitchCount >= 3)
+            {
+                if (debugPatterns)
+                {
+                    Debug.Log(
+                        $"[PlaySense] ATTENTION PATTERN: " +
+                        $"rapid environmental scanning " +
+                        $"detected.");
+                }
+
+                _attentionSwitchCount = 0;
+            }
+        }
+
+        // =====================================================
+        // REINSPECTION
+        // =====================================================
+
+        private bool HasPreviouslyAttended(
+            GameObject target)
+        {
+            if (target == null)
+                return false;
+
+            for (int i = 0;
+                 i < _attentionSequence.Count;
+                 i++)
+            {
+                if (_attentionSequence[i].ObjectName ==
+                    target.name)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // =====================================================
@@ -495,13 +986,13 @@ namespace PlaySense.Perception
                         target.name,
 
                     Distance =
-                        state.Distance,
+                        state.AttentionStartDistance,
 
                     Angle =
-                        state.Angle,
+                        state.AttentionStartAngle,
 
                     Position =
-                        target.transform.position,
+                        state.Position,
 
                     Visible =
                         state.Visible,
@@ -516,16 +1007,24 @@ namespace PlaySense.Perception
             _observations.Add(
                 observation);
 
-            Debug.Log(
-                $"[PlaySense] OBSERVATION CREATED: " +
-                $"{target.name} | " +
-                $"{duration:F2}s | " +
-                $"Total observations: " +
-                $"{_observations.Count}");
+            if (debugAttention)
+            {
+                Debug.Log(
+                    $"[PlaySense] OBSERVATION CREATED: " +
+                    $"{target.name} | " +
+                    $"Start: " +
+                    $"{observation.Timestamp:F2}s | " +
+                    $"Duration: " +
+                    $"{duration:F2}s | " +
+                    $"Score: " +
+                    $"{state.AttentionStartScore:F2} | " +
+                    $"Total observations: " +
+                    $"{_observations.Count}");
+            }
         }
 
         // =====================================================
-        // RAYCAST
+        // RAYCAST / OCCLUSION
         // =====================================================
 
         private bool IsUnobstructed(
@@ -592,8 +1091,11 @@ namespace PlaySense.Perception
 
             while (current != null)
             {
-                if (current.gameObject == target)
+                if (current.gameObject ==
+                    target)
+                {
                     return true;
+                }
 
                 current =
                     current.parent;
@@ -614,19 +1116,21 @@ namespace PlaySense.Perception
 
             foreach (var pair in _trackedObjects)
             {
-                if (!currentObjects.Contains(
+                if (currentObjects.Contains(
                         pair.Key))
                 {
-                    if (pair.Value.IsAttending)
-                    {
-                        EndAttention(
-                            pair.Key,
-                            pair.Value);
-                    }
-
-                    toRemove.Add(
-                        pair.Key);
+                    continue;
                 }
+
+                if (pair.Value.IsAttending)
+                {
+                    EndAttention(
+                        pair.Key,
+                        pair.Value);
+                }
+
+                toRemove.Add(
+                    pair.Key);
             }
 
             foreach (GameObject target in toRemove)
@@ -656,6 +1160,8 @@ namespace PlaySense.Perception
             return state.IsAttending;
         }
 
+        // -----------------------------------------------------
+
         public float GetAttentionTime(
             GameObject target)
         {
@@ -671,6 +1177,87 @@ namespace PlaySense.Perception
 
             return state.AttentionTime;
         }
+
+        // -----------------------------------------------------
+
+        public float GetAttentionScore(
+            GameObject target)
+        {
+            if (target == null)
+                return 0f;
+
+            if (!_trackedObjects.TryGetValue(
+                    target,
+                    out PerceptionState state))
+            {
+                return 0f;
+            }
+
+            return state.AttentionScore;
+        }
+
+        // -----------------------------------------------------
+
+        public float GetVisibleDuration(
+            GameObject target)
+        {
+            if (target == null)
+                return 0f;
+
+            if (!_trackedObjects.TryGetValue(
+                    target,
+                    out PerceptionState state))
+            {
+                return 0f;
+            }
+
+            return state.VisibleDuration;
+        }
+
+        // -----------------------------------------------------
+
+        public float GetTotalAttentionDuration(
+            GameObject target)
+        {
+            if (target == null)
+                return 0f;
+
+            if (!_trackedObjects.TryGetValue(
+                    target,
+                    out PerceptionState state))
+            {
+                return 0f;
+            }
+
+            return
+                state.TotalAttentionDuration +
+                (
+                    state.IsAttending
+                        ? PerceptionTime() -
+                          state.AttentionStartTime
+                        : 0f
+                );
+        }
+
+        // -----------------------------------------------------
+
+        public int GetAttentionCount(
+            GameObject target)
+        {
+            if (target == null)
+                return 0;
+
+            if (!_trackedObjects.TryGetValue(
+                    target,
+                    out PerceptionState state))
+            {
+                return 0;
+            }
+
+            return state.AttentionCount;
+        }
+
+        // -----------------------------------------------------
 
         public bool IsObjectVisible(
             GameObject target)
@@ -688,6 +1275,24 @@ namespace PlaySense.Perception
             return state.Visible;
         }
 
+        // -----------------------------------------------------
+
+        public string GetBestViewName(
+            GameObject target)
+        {
+            if (target == null)
+                return string.Empty;
+
+            if (!_trackedObjects.TryGetValue(
+                    target,
+                    out PerceptionState state))
+            {
+                return string.Empty;
+            }
+
+            return state.ViewName;
+        }
+
         // =====================================================
         // DEBUG GIZMOS
         // =====================================================
@@ -700,11 +1305,15 @@ namespace PlaySense.Perception
         }
 
         // =====================================================
-        // INTERNAL STATE
+        // PERCEPTION STATE
         // =====================================================
 
         private class PerceptionState
         {
+            // -------------------------------------------------
+            // CURRENT PERCEPTION
+            // -------------------------------------------------
+
             public float Distance;
 
             public float Angle;
@@ -713,17 +1322,85 @@ namespace PlaySense.Perception
 
             public bool Unobstructed;
 
+            public Vector3 Position;
+
+            public Vector3 Direction;
+
+            // -------------------------------------------------
+            // VIEW
+            // -------------------------------------------------
+
+            public PlaySenseView BestView;
+
+            public string ViewName;
+
+            // -------------------------------------------------
+            // VISIBILITY HISTORY
+            // -------------------------------------------------
+
+            public float FirstSeenTime;
+
+            public float LastSeenTime;
+
+            public float VisibleDuration;
+
+            public bool WasVisibleLastFrame;
+
+            // -------------------------------------------------
+            // ATTENTION
+            // -------------------------------------------------
+
             public bool AttentionCandidate;
+
+            public bool IsAttending;
 
             public float AttentionTime;
 
-            public bool IsAttending;
+            public float AttentionScore;
 
             public float AttentionStartTime;
 
             public float AttentionStartDistance;
 
             public float AttentionStartAngle;
+
+            public float AttentionStartScore;
+
+            // -------------------------------------------------
+            // ATTENTION HISTORY
+            // -------------------------------------------------
+
+            public int AttentionCount;
+
+            public float TotalAttentionDuration;
+
+            public float LastAttentionEndTime;
+        }
+
+        // =====================================================
+        // ATTENTION SEQUENCE ENTRY
+        // =====================================================
+
+        [Serializable]
+        public class AttentionSequenceEntry
+        {
+            public string ObjectName;
+
+            public float StartTime;
+
+            public float EndTime;
+
+            public float Duration;
+
+            public float Distance;
+
+            public float Angle;
+
+            public float AttentionScore;
+
+            public string ViewName;
+
+            public bool IsReinspection;
         }
     }
 }

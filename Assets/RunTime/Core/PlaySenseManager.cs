@@ -29,7 +29,8 @@ namespace PlaySense.Core
 
         private void Awake()
         {
-            Debug.Log("PlaySense Awake");
+            Debug.Log(
+                "[PlaySense] Awake");
 
             _recorder =
                 new SessionRecorder();
@@ -43,13 +44,17 @@ namespace PlaySense.Core
                     FindObjectsSortMode.None);
 
             _observationCursors =
-                new int[_perceptionSystems.Length];
+                new int[
+                    _perceptionSystems.Length];
 
             Debug.Log(
-                $"Found {_agents.Length} agents.");
+                $"[PlaySense] Found " +
+                $"{_agents.Length} agents.");
 
             Debug.Log(
-                $"Found {_perceptionSystems.Length} perception systems.");
+                $"[PlaySense] Found " +
+                $"{_perceptionSystems.Length} " +
+                $"perception systems.");
         }
 
         // =====================================================
@@ -58,11 +63,13 @@ namespace PlaySense.Core
 
         private void Start()
         {
-            Debug.Log("Starting PlaySense...");
+            Debug.Log(
+                "[PlaySense] Starting PlaySense...");
 
             _recorder.StartRecording();
 
-            Debug.Log("Recording Started!");
+            Debug.Log(
+                "[PlaySense] Recording Started!");
         }
 
         // =====================================================
@@ -88,9 +95,33 @@ namespace PlaySense.Core
 
         private void Update()
         {
-            _timer += Time.deltaTime;
+            if (_recorder == null ||
+                !_recorder.IsRecording)
+            {
+                return;
+            }
 
-            if (_timer < 1f / sampleRate)
+            // =================================================
+            // AUTHORITATIVE PLAY SENSE CLOCK
+            // =================================================
+
+            _recorder.Tick(
+                Time.unscaledDeltaTime);
+
+            // =================================================
+            // TELEMETRY SAMPLING
+            // =================================================
+
+            _timer +=
+                Time.unscaledDeltaTime;
+
+            float interval =
+                1f /
+                Mathf.Max(
+                    sampleRate,
+                    0.01f);
+
+            if (_timer < interval)
                 return;
 
             _timer = 0f;
@@ -106,12 +137,18 @@ namespace PlaySense.Core
 
         private void RecordAgents()
         {
-            foreach (PlaySenseAgent agent in _agents)
+            if (_agents == null)
+                return;
+
+            foreach (
+                PlaySenseAgent agent
+                in _agents)
             {
                 if (agent == null)
                     continue;
 
-                _recorder.RecordTrackable(agent);
+                _recorder.RecordTrackable(
+                    agent);
             }
         }
 
@@ -124,9 +161,10 @@ namespace PlaySense.Core
             if (_perceptionSystems == null)
                 return;
 
-            for (int i = 0;
-                 i < _perceptionSystems.Length;
-                 i++)
+            for (
+                int i = 0;
+                i < _perceptionSystems.Length;
+                i++)
             {
                 PlaySensePerception perception =
                     _perceptionSystems[i];
@@ -143,8 +181,9 @@ namespace PlaySense.Core
                 int cursor =
                     _observationCursors[i];
 
-                while (cursor <
-                       observations.Count)
+                while (
+                    cursor <
+                    observations.Count)
                 {
                     BehaviourObservation observation =
                         observations[cursor];
@@ -179,11 +218,15 @@ namespace PlaySense.Core
             if (_recorder == null)
                 return;
 
-            /*
-             * Before stopping, collect anything that perception
-             * produced during the final frame.
-             */
+            // -------------------------------------------------
+            // COLLECT FINAL BEHAVIOUR OBSERVATIONS
+            // -------------------------------------------------
+
             RecordBehaviour();
+
+            // -------------------------------------------------
+            // STOP SESSION
+            // -------------------------------------------------
 
             SessionData session =
                 _recorder.StopRecording();
@@ -191,21 +234,30 @@ namespace PlaySense.Core
             if (session == null)
                 return;
 
-            SessionStorage.Save(session);
+            // -------------------------------------------------
+            // SAVE
+            // -------------------------------------------------
+
+            SessionStorage.Save(
+                session);
+
+            // -------------------------------------------------
+            // DEBUG SUMMARY
+            // -------------------------------------------------
 
             Debug.Log(
                 "====== PLAYSENSE ======");
 
+            Debug.Log(
+                $"Frames: " +
+                $"{session.Metrics?.FrameCount ?? 0}");
+
+            Debug.Log(
+                $"Duration: " +
+                $"{session.Duration:F2}s");
+
             if (session.Metrics != null)
             {
-                Debug.Log(
-                    $"Frames: " +
-                    $"{session.Metrics.FrameCount}");
-
-                Debug.Log(
-                    $"Duration: " +
-                    $"{session.Metrics.Duration:F2}s");
-
                 Debug.Log(
                     $"Distance: " +
                     $"{session.Metrics.TotalDistance:F2}m");
@@ -217,7 +269,7 @@ namespace PlaySense.Core
 
             Debug.Log(
                 $"Behaviour Observations: " +
-                $"{session.BehaviourObservations.Count}");
+                $"{session.BehaviourObservations?.Count ?? 0}");
         }
     }
 }
