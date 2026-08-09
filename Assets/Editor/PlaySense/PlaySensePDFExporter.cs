@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 using PlaySense.Data.Models;
+using PlaySense.Reporting;
 
 namespace PlaySense.Export
 {
@@ -13,14 +14,19 @@ namespace PlaySense.Export
         private const float PageHeight = 842f;
 
         private const float MarginLeft = 48f;
-        private const float MarginRight = 48f;
         private const float MarginTop = 55f;
         private const float MarginBottom = 55f;
 
         private const float FontSize = 10f;
         private const float LineHeight = 15f;
 
-        public static string Export(SessionData session, string outputPath)
+        // =====================================================
+        // PUBLIC EXPORT
+        // =====================================================
+
+        public static string Export(
+            SessionData session,
+            string outputPath)
         {
             if (session == null)
             {
@@ -30,8 +36,24 @@ namespace PlaySense.Export
                 return null;
             }
 
+            // -------------------------------------------------
+            // Analyse session
+            // -------------------------------------------------
+
+            SessionBehaviourAnalyzer analyzer =
+                new SessionBehaviourAnalyzer();
+
+            BehaviourReport behaviour =
+                analyzer.Analyze(session);
+
+            // -------------------------------------------------
+            // Build pages
+            // -------------------------------------------------
+
             List<string> pages =
-                BuildPages(session);
+                BuildPages(
+                    session,
+                    behaviour);
 
             string pdf =
                 BuildPdf(pages);
@@ -46,78 +68,91 @@ namespace PlaySense.Export
             return outputPath;
         }
 
+        // =====================================================
+        // PAGE BUILDING
+        // =====================================================
+
         private static List<string> BuildPages(
-            SessionData session)
+            SessionData session,
+            BehaviourReport behaviour)
         {
             List<string> pages =
                 new List<string>();
 
-            StringBuilder currentPage =
+            StringBuilder page =
                 CreatePage();
 
             float y =
                 PageHeight - MarginTop;
 
+            // -------------------------------------------------
+            // HEADER
+            // -------------------------------------------------
+
             AddText(
-                currentPage,
+                page,
                 ref y,
                 "PLAYSENSE PLAYTEST REPORT",
                 20f,
                 true);
 
-            y -= 8f;
+            y -= 4f;
 
             AddText(
-                currentPage,
+                page,
                 ref y,
-                "Gameplay session analysis",
+                "Gameplay analytics and behavioural analysis",
                 11f,
                 false);
 
             y -= 18f;
 
+            // -------------------------------------------------
+            // SESSION SUMMARY
+            // -------------------------------------------------
+
             AddSectionTitle(
-                currentPage,
+                page,
                 ref y,
                 "SESSION SUMMARY");
 
             AddText(
-                currentPage,
+                page,
                 ref y,
                 $"Scene: {Safe(session.SceneName, "Unknown")}",
                 FontSize,
                 false);
 
             AddText(
-                currentPage,
+                page,
                 ref y,
                 $"Session ID: {Safe(session.SessionId, "Unknown")}",
                 FontSize,
                 false);
 
             AddText(
-                currentPage,
+                page,
                 ref y,
                 $"Duration: {session.Metrics.Duration:F2} seconds",
                 FontSize,
                 false);
 
             AddText(
-                currentPage,
+                page,
                 ref y,
                 $"Distance travelled: {session.Metrics.TotalDistance:F2} m",
                 FontSize,
                 false);
 
             AddText(
-                currentPage,
+                page,
                 ref y,
                 $"Average speed: {session.Metrics.AverageSpeed:F2} m/s",
                 FontSize,
                 false);
 
             AddText(
-                currentPage,
+                page,
                 ref y,
                 $"Frames recorded: {session.Metrics.FrameCount}",
                 FontSize,
@@ -129,7 +164,7 @@ namespace PlaySense.Export
                     : session.Events.Count;
 
             AddText(
-                currentPage,
+                page,
                 ref y,
                 $"Gameplay events: {eventCount}",
                 FontSize,
@@ -137,24 +172,136 @@ namespace PlaySense.Export
 
             y -= 14f;
 
+            // -------------------------------------------------
+            // BEHAVIOURAL ANALYSIS
+            // -------------------------------------------------
+
             AddSectionTitle(
-                currentPage,
+                page,
                 ref y,
-                "PLAYER ACTIVITY");
+                "BEHAVIOURAL ANALYSIS");
 
             AddText(
-                currentPage,
+                page,
                 ref y,
-                "The following timeline contains recorded gameplay events.",
+                $"Active time: {behaviour.ActiveTime:F2} seconds",
                 FontSize,
                 false);
 
-            y -= 6f;
+            AddText(
+                page,
+                ref y,
+                $"Idle time: {behaviour.IdleTime:F2} seconds",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Active time: {behaviour.ActivePercentage:F1}%",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Idle time: {behaviour.IdlePercentage:F1}%",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Peak speed: {behaviour.PeakSpeed:F2} m/s",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Movement segments: {behaviour.MovementSegments}",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Most frequent event category: {Safe(behaviour.MostFrequentCategory, "None")}",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Longest event gap: {behaviour.LongestEventGap:F2} seconds",
+                FontSize,
+                false);
+
+            y -= 14f;
+
+            // -------------------------------------------------
+            // KEY FINDINGS
+            // -------------------------------------------------
+
+            AddSectionTitle(
+                page,
+                ref y,
+                "KEY FINDINGS");
+
+            if (behaviour.Findings == null ||
+                behaviour.Findings.Count == 0)
+            {
+                AddText(
+                    page,
+                    ref y,
+                    "No behavioural findings were generated.",
+                    FontSize,
+                    false);
+            }
+            else
+            {
+                foreach (string finding
+                         in behaviour.Findings)
+                {
+                    List<string> wrapped =
+                        WrapText(
+                            "• " + finding,
+                            88);
+
+                    foreach (string line
+                             in wrapped)
+                    {
+                        EnsureSpace(
+                            ref page,
+                            ref y,
+                            pages,
+                            30f);
+
+                        AddText(
+                            page,
+                            ref y,
+                            line,
+                            FontSize,
+                            false);
+                    }
+                }
+            }
+
+            y -= 14f;
+
+            // -------------------------------------------------
+            // GAMEPLAY TIMELINE
+            // -------------------------------------------------
+
+            AddSectionTitle(
+                page,
+                ref y,
+                "GAMEPLAY TIMELINE");
 
             if (eventCount == 0)
             {
                 AddText(
-                    currentPage,
+                    page,
                     ref y,
                     "No gameplay events were recorded.",
                     FontSize,
@@ -166,7 +313,7 @@ namespace PlaySense.Export
                      i < session.Events.Count;
                      i++)
                 {
-                    var gameEvent =
+                    GameEventData gameEvent =
                         session.Events[i];
 
                     string category =
@@ -186,55 +333,30 @@ namespace PlaySense.Export
 
                     string line =
                         $"{gameEvent.Timestamp:F2}s   " +
-                        $"{category} / {action}";
+                        $"{category} → {action}";
 
                     if (!string.IsNullOrEmpty(target))
                     {
-                        line += $" — {target}";
+                        line +=
+                            $" — {target}";
                     }
 
                     List<string> wrapped =
                         WrapText(
                             line,
-                            92);
+                            88);
 
-                    foreach (string wrappedLine in wrapped)
+                    foreach (string wrappedLine
+                             in wrapped)
                     {
-                        if (y < MarginBottom + 25f)
-                        {
-                            FinishPage(
-                                currentPage);
-
-                            pages.Add(
-                                currentPage.ToString());
-
-                            currentPage =
-                                CreatePage();
-
-                            y =
-                                PageHeight - MarginTop;
-
-                            AddText(
-                                currentPage,
-                                ref y,
-                                "PLAYSENSE PLAYTEST REPORT",
-                                14f,
-                                true);
-
-                            y -= 10f;
-
-                            AddText(
-                                currentPage,
-                                ref y,
-                                "PLAYER ACTIVITY — CONTINUED",
-                                11f,
-                                true);
-
-                            y -= 10f;
-                        }
+                        EnsureSpace(
+                            ref page,
+                            ref y,
+                            pages,
+                            30f);
 
                         AddText(
-                            currentPage,
+                            page,
                             ref y,
                             wrappedLine,
                             FontSize,
@@ -245,61 +367,151 @@ namespace PlaySense.Export
 
             y -= 18f;
 
-            if (y < MarginBottom + 100f)
-            {
-                FinishPage(
-                    currentPage);
+            // -------------------------------------------------
+            // BEHAVIOURAL CONTEXT
+            // -------------------------------------------------
 
-                pages.Add(
-                    currentPage.ToString());
-
-                currentPage =
-                    CreatePage();
-
-                y =
-                    PageHeight - MarginTop;
-            }
+            EnsureSpace(
+                ref page,
+                ref y,
+                pages,
+                120f);
 
             AddSectionTitle(
-                currentPage,
+                page,
                 ref y,
-                "REPORT NOTES");
+                "BEHAVIOURAL CONTEXT");
+
+            string behaviourContext =
+                BuildBehaviourContext(
+                    behaviour);
+
+            // IMPORTANT:
+            // Wrap the behavioural context paragraph.
+            // Previously this was written as one giant line,
+            // causing the text to run outside the page width.
+
+            List<string> contextLines =
+                WrapText(
+                    behaviourContext,
+                    88);
+
+            foreach (string line
+                     in contextLines)
+            {
+                EnsureSpace(
+                    ref page,
+                    ref y,
+                    pages,
+                    30f);
+
+                AddText(
+                    page,
+                    ref y,
+                    line,
+                    FontSize,
+                    false);
+            }
+
+            y -= 15f;
+
+            // -------------------------------------------------
+            // FOOTER
+            // -------------------------------------------------
+
+            EnsureSpace(
+                ref page,
+                ref y,
+                pages,
+                45f);
 
             AddText(
-                currentPage,
+                page,
                 ref y,
-                "This report was generated automatically by PlaySense.",
-                FontSize,
+                "Generated automatically by PlaySense.",
+                8f,
                 false);
 
             AddText(
-                currentPage,
+                page,
                 ref y,
-                "Recorded gameplay data is presented for playtest and design analysis.",
-                FontSize,
+                "This report is based on recorded gameplay telemetry.",
+                8f,
                 false);
 
             FinishPage(
-                currentPage);
+                page);
 
             pages.Add(
-                currentPage.ToString());
+                page.ToString());
 
             return pages;
         }
 
-        private static StringBuilder CreatePage()
+        // =====================================================
+        // BEHAVIOURAL CONTEXT
+        // =====================================================
+
+        private static string BuildBehaviourContext(
+            BehaviourReport behaviour)
         {
-            return new StringBuilder();
+            if (behaviour == null)
+            {
+                return "Behavioural analysis was unavailable.";
+            }
+
+            StringBuilder result =
+                new StringBuilder();
+
+            if (behaviour.ActivePercentage >= 80f)
+            {
+                result.Append(
+                    "The player demonstrated a highly active movement pattern during the session. ");
+            }
+            else if (behaviour.ActivePercentage <= 35f)
+            {
+                result.Append(
+                    "The player demonstrated a relatively low-movement pattern, with substantial periods of minimal movement. ");
+            }
+            else
+            {
+                result.Append(
+                    "The player demonstrated a mixed movement pattern, alternating between active movement and periods of minimal movement. ");
+            }
+
+            if (behaviour.MovementSegments >= 5)
+            {
+                result.Append(
+                    $"Movement was divided into {behaviour.MovementSegments} distinct segments, indicating repeated starts and stops. ");
+            }
+            else if (behaviour.MovementSegments <= 1)
+            {
+                result.Append(
+                    "Movement was relatively continuous, with few distinct starts and stops. ");
+            }
+
+            if (behaviour.EventCount > 0)
+            {
+                result.Append(
+                    $"{behaviour.EventCount} gameplay event(s) were recorded");
+
+                if (!string.IsNullOrEmpty(
+                    behaviour.MostFrequentCategory) &&
+                    behaviour.MostFrequentCategory != "None")
+                {
+                    result.Append(
+                        $", with \"{behaviour.MostFrequentCategory}\" being the most frequent category");
+                }
+
+                result.Append(".");
+            }
+
+            return result.ToString();
         }
 
-        private static void FinishPage(
-            StringBuilder page)
-        {
-            page.AppendLine(
-                "BT /F1 8 Tf 48 28 Td " +
-                "(Generated by PlaySense) Tj ET");
-        }
+        // =====================================================
+        // SECTION TITLES
+        // =====================================================
 
         private static void AddSectionTitle(
             StringBuilder page,
@@ -318,6 +530,10 @@ namespace PlaySense.Export
             y -= 5f;
         }
 
+        // =====================================================
+        // TEXT
+        // =====================================================
+
         private static void AddText(
             StringBuilder page,
             ref float y,
@@ -335,6 +551,67 @@ namespace PlaySense.Export
 
             y -= LineHeight;
         }
+
+        // =====================================================
+        // PAGE MANAGEMENT
+        // =====================================================
+
+        private static void EnsureSpace(
+            ref StringBuilder page,
+            ref float y,
+            List<string> pages,
+            float requiredSpace)
+        {
+            if (y >= MarginBottom + requiredSpace)
+                return;
+
+            FinishPage(
+                page);
+
+            pages.Add(
+                page.ToString());
+
+            page =
+                CreatePage();
+
+            y =
+                PageHeight - MarginTop;
+
+            AddText(
+                page,
+                ref y,
+                "PLAYSENSE PLAYTEST REPORT",
+                14f,
+                true);
+
+            y -= 8f;
+
+            AddText(
+                page,
+                ref y,
+                "CONTINUED",
+                11f,
+                true);
+
+            y -= 10f;
+        }
+
+        private static StringBuilder CreatePage()
+        {
+            return new StringBuilder();
+        }
+
+        private static void FinishPage(
+            StringBuilder page)
+        {
+            page.AppendLine(
+                "BT /F1 8 Tf 48 28 Td " +
+                "(Generated by PlaySense) Tj ET");
+        }
+
+        // =====================================================
+        // TEXT HELPERS
+        // =====================================================
 
         private static string EscapePdfText(
             string text)
@@ -413,9 +690,9 @@ namespace PlaySense.Export
             return lines;
         }
 
-        // -----------------------------------------------------
-        // Minimal PDF writer
-        // -----------------------------------------------------
+        // =====================================================
+        // PDF GENERATION
+        // =====================================================
 
         private static string BuildPdf(
             List<string> pages)
@@ -423,13 +700,24 @@ namespace PlaySense.Export
             List<string> objects =
                 new List<string>();
 
+            // -------------------------------------------------
+            // Object 1: Catalog
+            // -------------------------------------------------
+
             objects.Add(
                 "<< /Type /Catalog /Pages 2 0 R >>");
 
-            List<int> pageObjectIds =
-                new List<int>();
+            // -------------------------------------------------
+            // Object 2: Pages
+            // -------------------------------------------------
+
+            objects.Add("");
 
             int nextObjectId = 3;
+
+            // -------------------------------------------------
+            // Helvetica font
+            // -------------------------------------------------
 
             int fontObjectId =
                 nextObjectId++;
@@ -438,6 +726,9 @@ namespace PlaySense.Export
                 "<< /Type /Font " +
                 "/Subtype /Type1 " +
                 "/BaseFont /Helvetica >>");
+
+            List<int> pageObjectIds =
+                new List<int>();
 
             foreach (string pageContent in pages)
             {
@@ -450,16 +741,13 @@ namespace PlaySense.Export
                 pageObjectIds.Add(
                     pageId);
 
-                string stream =
-                    pageContent;
-
                 string contentObject =
                     "<< /Length " +
                     Encoding.ASCII
-                        .GetByteCount(stream) +
+                        .GetByteCount(pageContent) +
                     " >>\n" +
                     "stream\n" +
-                    stream +
+                    pageContent +
                     "\nendstream";
 
                 while (objects.Count < contentId)
@@ -488,6 +776,10 @@ namespace PlaySense.Export
                     pageObject;
             }
 
+            // -------------------------------------------------
+            // Page tree
+            // -------------------------------------------------
+
             string kids =
                 string.Join(
                     " ",
@@ -498,6 +790,10 @@ namespace PlaySense.Export
                 "<< /Type /Pages " +
                 $"/Kids [{kids}] " +
                 $"/Count {pageObjectIds.Count} >>";
+
+            // -------------------------------------------------
+            // Build PDF
+            // -------------------------------------------------
 
             StringBuilder pdf =
                 new StringBuilder();
@@ -527,6 +823,10 @@ namespace PlaySense.Export
                     "endobj");
             }
 
+            // -------------------------------------------------
+            // Cross-reference table
+            // -------------------------------------------------
+
             long xrefPosition =
                 Encoding.ASCII
                     .GetByteCount(
@@ -546,6 +846,10 @@ namespace PlaySense.Export
                 pdf.AppendLine(
                     $"{offset:D10} 00000 n ");
             }
+
+            // -------------------------------------------------
+            // Trailer
+            // -------------------------------------------------
 
             pdf.AppendLine(
                 "trailer");
