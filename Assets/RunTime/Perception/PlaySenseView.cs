@@ -8,19 +8,22 @@ namespace PlaySense.Perception
         [SerializeField]
         private bool activeView = true;
 
+        [Header("Fallback Settings")]
         [SerializeField]
-        private float fieldOfView = 90f;
+        private float fallbackFieldOfView = 90f;
 
         [SerializeField]
-        private float nearClip = 0.05f;
+        private float fallbackNearClip = 0.05f;
 
         [SerializeField]
-        private float farClip = 100f;
+        private float fallbackFarClip = 100f;
 
         [Header("View Type")]
         [SerializeField]
         private ViewType viewType =
             ViewType.Gameplay;
+
+        private Camera _camera;
 
         // =====================================================
         // PUBLIC PROPERTIES
@@ -37,17 +40,69 @@ namespace PlaySense.Perception
         public Vector3 Forward =>
             transform.forward;
 
-        public float FieldOfView =>
-            fieldOfView;
+        public float FieldOfView
+        {
+            get
+            {
+                if (_camera != null)
+                    return _camera.fieldOfView;
 
-        public float NearClip =>
-            nearClip;
+                return fallbackFieldOfView;
+            }
+        }
 
-        public float FarClip =>
-            farClip;
+        public float NearClip
+        {
+            get
+            {
+                if (_camera != null)
+                    return _camera.nearClipPlane;
+
+                return fallbackNearClip;
+            }
+        }
+
+        public float FarClip
+        {
+            get
+            {
+                if (_camera != null)
+                    return _camera.farClipPlane;
+
+                return fallbackFarClip;
+            }
+        }
 
         public ViewType Type =>
             viewType;
+
+        public Camera Camera =>
+            _camera;
+
+        // =====================================================
+        // INITIALIZATION
+        // =====================================================
+
+        private void Awake()
+        {
+            _camera =
+                GetComponent<Camera>();
+
+            if (_camera != null)
+            {
+                Debug.Log(
+                    $"[PlaySense] View '{name}' " +
+                    $"connected to Camera | " +
+                    $"FOV: {_camera.fieldOfView:F1}°");
+            }
+            else
+            {
+                Debug.Log(
+                    $"[PlaySense] View '{name}' " +
+                    $"has no Camera component. " +
+                    $"Using fallback view settings.");
+            }
+        }
 
         // =====================================================
         // VIEW TYPES

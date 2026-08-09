@@ -2,9 +2,9 @@ using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-using PlaySense.Core;
 using PlaySense.Data.Models;
 using PlaySense.Reporting;
+using PlaySense.Core;
 
 namespace PlaySense.Recording
 {
@@ -12,17 +12,35 @@ namespace PlaySense.Recording
     {
         private SessionData _session;
 
-        private float _startTime;
+        // PlaySense's own session clock.
+        private float _sessionStartTime;
+
+        private bool _isRecording;
 
         // =====================================================
         // SESSION
         // =====================================================
 
-        public SessionData CurrentSession
+        public SessionData CurrentSession =>
+            _session;
+
+        public bool IsRecording =>
+            _isRecording;
+
+        public float ElapsedTime
         {
             get
             {
-                return _session;
+                if (!_isRecording)
+                {
+                    if (_session != null)
+                        return _session.Duration;
+
+                    return 0f;
+                }
+
+                return Time.realtimeSinceStartup -
+                       _sessionStartTime;
             }
         }
 
@@ -38,11 +56,20 @@ namespace PlaySense.Recording
             _session.SessionId =
                 Guid.NewGuid().ToString();
 
-            _startTime =
-                Time.time;
+            _session.SceneName =
+                SceneManager.GetActiveScene().name;
+
+            _session.Duration =
+                0f;
+
+            _sessionStartTime =
+                Time.realtimeSinceStartup;
+
+            _isRecording =
+                true;
 
             Debug.Log(
-                "PlaySense SessionRecorder started.");
+                "[PlaySense] Session clock started.");
         }
 
         // =====================================================
@@ -52,7 +79,8 @@ namespace PlaySense.Recording
         public void RecordTrackable(
             PlaySenseAgent agent)
         {
-            if (_session == null ||
+            if (!_isRecording ||
+                _session == null ||
                 agent == null)
             {
                 return;
@@ -65,7 +93,7 @@ namespace PlaySense.Recording
                         agent.name,
 
                     Timestamp =
-                        Time.time,
+                        ElapsedTime,
 
                     Position =
                         agent.transform.position,
@@ -76,7 +104,7 @@ namespace PlaySense.Recording
         }
 
         // =====================================================
-        // GAME EVENT
+        // GAMEPLAY EVENT
         // =====================================================
 
         public void RecordEvent(
@@ -85,8 +113,11 @@ namespace PlaySense.Recording
             string target,
             Vector3 position)
         {
-            if (_session == null)
+            if (!_isRecording ||
+                _session == null)
+            {
                 return;
+            }
 
             _session.Events.Add(
                 new GameEventData
@@ -101,29 +132,46 @@ namespace PlaySense.Recording
                         target,
 
                     Timestamp =
-                        Time.time -
-                        _startTime,
+                        ElapsedTime,
 
                     Position =
                         position
                 });
+
+            Debug.Log(
+                $"[PlaySense] Event recorded: " +
+                $"{action} → {target} " +
+                $"at {ElapsedTime:F2}s");
         }
 
         // =====================================================
-        // BEHAVIOUR OBSERVATION
+        // BEHAVIOUR
         // =====================================================
 
         public void RecordBehaviour(
             BehaviourObservation observation)
         {
-            if (_session == null ||
+            if (!_isRecording ||
+                _session == null ||
                 observation == null)
             {
                 return;
             }
 
+            // Make sure the observation uses
+            // PlaySense's session timeline.
+            observation.Timestamp =
+                observation.Timestamp;
+
             _session.BehaviourObservations.Add(
                 observation);
+
+            Debug.Log(
+                $"[PlaySense] Behaviour recorded: " +
+                $"{observation.Type} → " +
+                $"{observation.Subject} " +
+                $"at {observation.Timestamp:F2}s " +
+                $"for {observation.Duration:F2}s");
         }
 
         // =====================================================
@@ -135,23 +183,37 @@ namespace PlaySense.Recording
             if (_session == null)
                 return null;
 
+            if (!_isRecording)
+                return _session;
+
+            // Capture the final session time BEFORE
+            // disabling the recording state.
+            float finalDuration =
+                Time.realtimeSinceStartup -
+                _sessionStartTime;
+
             _session.Duration =
-                Time.time -
-                _startTime;
+                Mathf.Max(
+                    0f,
+                    finalDuration);
 
             _session.SceneName =
                 SceneManager.GetActiveScene().name;
 
+            _isRecording =
+                false;
+
+            // Analyse the completed session.
             SessionAnalyzer analyzer =
                 new SessionAnalyzer();
 
             _session.Metrics =
-                analyzer.Analyze(_session);
+                analyzer.Analyze(
+                    _session);
 
             Debug.Log(
-                $"PlaySense recording stopped. " +
-                $"Behaviour observations: " +
-                $"{_session.BehaviourObservations.Count}");
+                $"[PlaySense] Session clock stopped: " +
+                $"{_session.Duration:F2}s");
 
             return _session;
         }

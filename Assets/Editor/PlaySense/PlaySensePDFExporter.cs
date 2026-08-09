@@ -368,6 +368,97 @@ namespace PlaySense.Export
             y -= 18f;
 
             // -------------------------------------------------
+            // BEHAVIOURAL TIMELINE
+            // -------------------------------------------------
+
+            EnsureSpace(
+                ref page,
+                ref y,
+                pages,
+                150f);
+
+            AddSectionTitle(
+                page,
+                ref y,
+                "BEHAVIOURAL TIMELINE");
+
+            int observationCount =
+                session.BehaviourObservations == null
+                    ? 0
+                    : session.BehaviourObservations.Count;
+
+            if (observationCount == 0)
+            {
+                AddText(
+                    page,
+                    ref y,
+                    "No behavioural observations were recorded.",
+                    FontSize,
+                    false);
+            }
+            else
+            {
+                for (int i = 0;
+                     i < session.BehaviourObservations.Count;
+                     i++)
+                {
+                    BehaviourObservation observation =
+                        session.BehaviourObservations[i];
+
+                    if (observation == null)
+                        continue;
+
+                    EnsureSpace(
+                        ref page,
+                        ref y,
+                        pages,
+                        95f);
+
+                    AddText(
+                        page,
+                        ref y,
+                        $"{observation.Timestamp:F2}s   {Safe(observation.Type, "Behaviour")}",
+                        FontSize,
+                        true);
+
+                    AddText(
+                        page,
+                        ref y,
+                        $"Target: {Safe(observation.Subject, "Unknown object")}",
+                        FontSize,
+                        false);
+
+                    AddText(
+                        page,
+                        ref y,
+                        $"Duration: {observation.Duration:F2}s   " +
+                        $"Distance: {observation.Distance:F2}m   " +
+                        $"View angle: {observation.Angle:F1} deg",
+                        FontSize,
+                        false);
+
+                    string description =
+                        BuildObservationDescription(
+                            observation);
+
+                    foreach (string line in
+                             WrapText(
+                                 description,
+                                 88))
+                    {
+                        AddText(
+                            page,
+                            ref y,
+                            line,
+                            FontSize,
+                            false);
+                    }
+
+                    y -= 6f;
+                }
+            }
+
+            // -------------------------------------------------
             // BEHAVIOURAL CONTEXT
             // -------------------------------------------------
 
@@ -507,6 +598,33 @@ namespace PlaySense.Export
             }
 
             return result.ToString();
+        }
+
+        // =====================================================
+        // BEHAVIOURAL OBSERVATION DESCRIPTION
+        // =====================================================
+
+        private static string BuildObservationDescription(
+            BehaviourObservation observation)
+        {
+            if (observation == null)
+                return "Behavioural observation was unavailable.";
+
+            string subject =
+                Safe(observation.Subject, "the object");
+
+            if (observation.Type == "ObjectAttended")
+            {
+                return
+                    $"The player visually attended to {subject} " +
+                    $"for {observation.Duration:F2} seconds. " +
+                    $"The object was approximately {observation.Distance:F2} metres away " +
+                    $"at an average view angle of {observation.Angle:F1} degrees.";
+            }
+
+            return
+                $"PlaySense recorded {Safe(observation.Type, "a behavioural observation")} " +
+                $"involving {subject} for {observation.Duration:F2} seconds.";
         }
 
         // =====================================================
