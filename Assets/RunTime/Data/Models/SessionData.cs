@@ -6,22 +6,42 @@ namespace PlaySense.Data.Models
     [Serializable]
     public class SessionData
     {
-        public string Version = "0.1.0";
+        // =====================================================
+        // SESSION
+        // =====================================================
 
         public string SessionId;
 
         public string SceneName;
 
-        public string StartTime;
-
-        public string EndTime;
-
         public float Duration;
 
-        public SessionMetrics Metrics = new();
+        // =====================================================
+        // MOVEMENT DATA
+        // =====================================================
 
-        public List<FrameData> Frames = new();
+        public List<FrameData> Frames =
+            new List<FrameData>();
 
-        public List<GameEventData> Events = new();
+        // =====================================================
+        // GAME EVENTS
+        // =====================================================
+
+        public List<GameEventData> Events =
+            new List<GameEventData>();
+
+        // =====================================================
+        // BEHAVIOURAL OBSERVATIONS
+        // =====================================================
+
+        public List<BehaviourObservation>
+            BehaviourObservations =
+            new List<BehaviourObservation>();
+
+        // =====================================================
+        // ANALYTICS
+        // =====================================================
+
+        public SessionMetrics Metrics;
     }
 }

@@ -1,9 +1,10 @@
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+
+using PlaySense.Core;
 using PlaySense.Data.Models;
 using PlaySense.Reporting;
-using PlaySense.Core;
 
 namespace PlaySense.Recording
 {
@@ -13,43 +14,144 @@ namespace PlaySense.Recording
 
         private float _startTime;
 
+        // =====================================================
+        // SESSION
+        // =====================================================
+
+        public SessionData CurrentSession
+        {
+            get
+            {
+                return _session;
+            }
+        }
+
+        // =====================================================
+        // START
+        // =====================================================
+
         public void StartRecording()
         {
-            _session = new SessionData();
+            _session =
+                new SessionData();
 
-            _session.SessionId = Guid.NewGuid().ToString();
+            _session.SessionId =
+                Guid.NewGuid().ToString();
 
-            _startTime = Time.time;
+            _startTime =
+                Time.time;
+
+            Debug.Log(
+                "PlaySense SessionRecorder started.");
         }
 
-        public void RecordTrackable(PlaySenseAgent agent)
+        // =====================================================
+        // TRACKABLE
+        // =====================================================
+
+        public void RecordTrackable(
+            PlaySenseAgent agent)
         {
-            _session.Frames.Add(new FrameData
+            if (_session == null ||
+                agent == null)
             {
-                ObjectName = agent.name,
-                Timestamp = Time.time,
-                Position = agent.transform.position,
-                Rotation = agent.transform.rotation
-            });
+                return;
+            }
+
+            _session.Frames.Add(
+                new FrameData
+                {
+                    ObjectName =
+                        agent.name,
+
+                    Timestamp =
+                        Time.time,
+
+                    Position =
+                        agent.transform.position,
+
+                    Rotation =
+                        agent.transform.rotation
+                });
         }
 
-        public void RecordEvent(GameEventData gameEvent)
+        // =====================================================
+        // GAME EVENT
+        // =====================================================
+
+        public void RecordEvent(
+            string category,
+            string action,
+            string target,
+            Vector3 position)
         {
-            gameEvent.Timestamp = Time.time - _startTime;
-            _session.Events.Add(gameEvent);
+            if (_session == null)
+                return;
+
+            _session.Events.Add(
+                new GameEventData
+                {
+                    Category =
+                        category,
+
+                    Action =
+                        action,
+
+                    Target =
+                        target,
+
+                    Timestamp =
+                        Time.time -
+                        _startTime,
+
+                    Position =
+                        position
+                });
         }
+
+        // =====================================================
+        // BEHAVIOUR OBSERVATION
+        // =====================================================
+
+        public void RecordBehaviour(
+            BehaviourObservation observation)
+        {
+            if (_session == null ||
+                observation == null)
+            {
+                return;
+            }
+
+            _session.BehaviourObservations.Add(
+                observation);
+        }
+
+        // =====================================================
+        // STOP
+        // =====================================================
 
         public SessionData StopRecording()
         {
-            _session.Duration = Time.time - _startTime;
+            if (_session == null)
+                return null;
+
+            _session.Duration =
+                Time.time -
+                _startTime;
 
             _session.SceneName =
                 SceneManager.GetActiveScene().name;
 
-            SessionAnalyzer analyzer = new();
+            SessionAnalyzer analyzer =
+                new SessionAnalyzer();
 
             _session.Metrics =
                 analyzer.Analyze(_session);
+
+            Debug.Log(
+                $"PlaySense recording stopped. " +
+                $"Behaviour observations: " +
+                $"{_session.BehaviourObservations.Count}");
 
             return _session;
         }
