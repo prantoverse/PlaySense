@@ -5,6 +5,8 @@ using UnityEngine;
 using PlaySense.Data.Models;
 using PlaySense.Export;
 
+
+
 public class PlaySenseDashboard : EditorWindow
 {
     private Vector2 mainScroll;
@@ -398,6 +400,10 @@ public class PlaySenseDashboard : EditorWindow
         GUILayout.Space(10);
 
         DrawMetricGrid();
+
+        GUILayout.Space(15);
+
+        PlaySenseMovementChart.Draw(selectedSession);
 
         GUILayout.Space(15);
 

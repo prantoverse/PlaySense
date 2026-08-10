@@ -33,7 +33,6 @@ namespace PlaySense.Export
             {
                 Debug.LogError(
                     "[PlaySense] PDF Export failed: SessionData is null.");
-
                 return null;
             }
 
@@ -41,52 +40,40 @@ namespace PlaySense.Export
             {
                 Debug.LogError(
                     "[PlaySense] PDF Export failed: output path is empty.");
-
                 return null;
             }
 
             try
             {
-                outputPath =
-                    Path.GetFullPath(outputPath);
+                outputPath = Path.GetFullPath(outputPath);
             }
             catch (Exception exception)
             {
                 Debug.LogError(
                     $"[PlaySense] PDF Export failed: invalid output path.\n{exception}");
-
                 return null;
             }
 
-            string directory =
-                Path.GetDirectoryName(outputPath);
+            string directory = Path.GetDirectoryName(outputPath);
 
             if (string.IsNullOrWhiteSpace(directory))
             {
                 Debug.LogError(
-                    $"[PlaySense] PDF Export failed: could not determine output directory.\n{outputPath}");
-
+                    "[PlaySense] PDF Export failed: could not determine output directory.");
                 return null;
             }
 
             try
             {
                 if (!Directory.Exists(directory))
-                {
                     Directory.CreateDirectory(directory);
-                }
             }
             catch (Exception exception)
             {
                 Debug.LogError(
                     $"[PlaySense] PDF Export failed: could not create output directory.\n{exception}");
-
                 return null;
             }
-
-            // -------------------------------------------------
-            // Analyse session
-            // -------------------------------------------------
 
             SessionBehaviourAnalyzer analyzer =
                 new SessionBehaviourAnalyzer();
@@ -94,46 +81,40 @@ namespace PlaySense.Export
             BehaviourReport behaviour =
                 analyzer.Analyze(session);
 
+            SessionAttentionAnalyzer attentionAnalyzer =
+                new SessionAttentionAnalyzer();
+
+            AttentionAnalysis attentionAnalysis =
+                attentionAnalyzer.Analyze(session);
+
             if (behaviour == null)
             {
                 Debug.LogError(
                     "[PlaySense] PDF Export failed: behavioural analysis returned null.");
-
                 return null;
             }
-
-            // -------------------------------------------------
-            // Build pages
-            // -------------------------------------------------
 
             List<string> pages =
                 BuildPages(
-                    session,
-                    behaviour);
+                session,
+                behaviour,
+                attentionAnalysis);
 
-            if (pages == null ||
-                pages.Count == 0)
+            if (pages == null || pages.Count == 0)
             {
                 Debug.LogError(
                     "[PlaySense] PDF Export failed: no pages were generated.");
-
                 return null;
             }
 
-            string pdf =
-                BuildPdf(pages);
+            string pdf = BuildPdf(pages);
 
             if (string.IsNullOrWhiteSpace(pdf))
             {
                 Debug.LogError(
                     "[PlaySense] PDF Export failed: generated PDF was empty.");
-
                 return null;
             }
-
-            // -------------------------------------------------
-            // Write file
-            // -------------------------------------------------
 
             try
             {
@@ -145,7 +126,6 @@ namespace PlaySense.Export
             {
                 Debug.LogError(
                     $"[PlaySense] PDF Export failed while writing file:\n{exception}");
-
                 return null;
             }
 
@@ -161,7 +141,8 @@ namespace PlaySense.Export
 
         private static List<string> BuildPages(
             SessionData session,
-            BehaviourReport behaviour)
+            BehaviourReport behaviour,
+            AttentionAnalysis attentionAnalysis)
         {
             List<string> pages =
                 new List<string>();
@@ -220,7 +201,7 @@ namespace PlaySense.Export
             AddText(
                 page,
                 ref y,
-                $"Duration: {session.Duration:F2} seconds",
+                $"Duration: {GetSessionDuration(session):F2} seconds",
                 FontSize,
                 false);
 
@@ -250,10 +231,22 @@ namespace PlaySense.Export
                     ? 0
                     : session.Events.Count;
 
+            int observationCount =
+                session.BehaviourObservations == null
+                    ? 0
+                    : session.BehaviourObservations.Count;
+
             AddText(
                 page,
                 ref y,
                 $"Gameplay events: {eventCount}",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Behaviour observations: {observationCount}",
                 FontSize,
                 false);
 
@@ -324,6 +317,119 @@ namespace PlaySense.Export
                 FontSize,
                 false);
 
+            y -= 10f;
+
+            // =================================================
+            // ATTENTION ANALYSIS
+            // =================================================
+
+            EnsureSpace(
+                ref page,
+                ref y,
+                pages,
+                125f);
+
+            AddSectionTitle(
+                page,
+                ref y,
+                "ATTENTION ANALYSIS");
+
+            AddText(
+                page,
+                ref y,
+                $"Attention count: {behaviour.AttentionCount}",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Total attention time: {behaviour.TotalAttentionTime:F2} seconds",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Average attention duration: {behaviour.AverageAttentionDuration:F2} seconds",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Longest attention duration: {behaviour.LongestAttentionDuration:F2} seconds",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Unique attended objects: {behaviour.UniqueAttendedObjects}",
+                FontSize,
+                false);
+
+            AddText(
+                page,
+                ref y,
+                $"Reinspection count: {behaviour.ReinspectionCount}",
+                FontSize,
+                false);
+
+            y -= 12f;
+
+            // =================================================
+            // DETAILED ATTENTION ANALYSIS
+            // =================================================
+
+            BuildDetailedAttentionAnalysis(
+                page,
+                ref y,
+                pages,
+                attentionAnalysis);
+
+            // =================================================
+            // MOVEMENT CHART
+            // =================================================
+
+            EnsureSpace(
+                ref page,
+                ref y,
+                pages,
+                175f);
+
+            AddSectionTitle(
+                page,
+                ref y,
+                "MOVEMENT OVER TIME");
+
+            DrawMovementChart(
+                page,
+                ref y,
+                session);
+
+            y -= 14f;
+
+            // =================================================
+            // ATTENTION CHART
+            // =================================================
+
+            EnsureSpace(
+                ref page,
+                ref y,
+                pages,
+                175f);
+
+            AddSectionTitle(
+                page,
+                ref y,
+                "ATTENTION OVER TIME");
+
+            DrawAttentionChart(
+                page,
+                ref y,
+                session);
+
             y -= 14f;
 
             // =================================================
@@ -353,9 +459,7 @@ namespace PlaySense.Export
                         continue;
 
                     List<string> wrapped =
-                        WrapText(
-                            finding,
-                            84);
+                        WrapText(finding, 84);
 
                     bool firstLine = true;
 
@@ -367,15 +471,10 @@ namespace PlaySense.Export
                             pages,
                             30f);
 
-                        string outputLine =
-                            firstLine
-                                ? "- " + line
-                                : "  " + line;
-
                         AddText(
                             page,
                             ref y,
-                            outputLine,
+                            firstLine ? "- " + line : "  " + line,
                             FontSize,
                             false);
 
@@ -386,7 +485,18 @@ namespace PlaySense.Export
                 }
             }
 
-            y -= 14f;
+            // =================================================
+            // ATTENTION FINDINGS
+            // =================================================
+
+            BuildAttentionFindings(
+                page,
+                ref y,
+                pages,
+                behaviour,
+                attentionAnalysis);
+
+            y -= 10f;
 
             // =================================================
             // GAMEPLAY TIMELINE
@@ -419,36 +529,23 @@ namespace PlaySense.Export
                         continue;
 
                     string category =
-                        Safe(
-                            gameEvent.Category,
-                            "Event");
+                        Safe(gameEvent.Category, "Event");
 
                     string action =
-                        Safe(
-                            gameEvent.Action,
-                            "Unknown action");
+                        Safe(gameEvent.Action, "Unknown action");
 
                     string target =
-                        Safe(
-                            gameEvent.Target,
-                            "");
+                        Safe(gameEvent.Target, "");
 
                     string line =
                         $"{gameEvent.Timestamp:F2}s   " +
                         $"{category}: {action}";
 
                     if (!string.IsNullOrEmpty(target))
-                    {
-                        line +=
-                            $" - {target}";
-                    }
+                        line += $" - {target}";
 
-                    List<string> wrapped =
-                        WrapText(
-                            line,
-                            88);
-
-                    foreach (string wrappedLine in wrapped)
+                    foreach (string wrappedLine in
+                             WrapText(line, 88))
                     {
                         EnsureSpace(
                             ref page,
@@ -482,11 +579,6 @@ namespace PlaySense.Export
                 page,
                 ref y,
                 "BEHAVIOURAL TIMELINE");
-
-            int observationCount =
-                session.BehaviourObservations == null
-                    ? 0
-                    : session.BehaviourObservations.Count;
 
             if (observationCount == 0)
             {
@@ -538,15 +630,28 @@ namespace PlaySense.Export
                         FontSize,
                         false);
 
+                    AddText(
+                        page,
+                        ref y,
+                        $"Visible: {observation.Visible}   " +
+                        $"Unobstructed: {observation.Unobstructed}   " +
+                        $"Attended: {observation.Attended}",
+                        FontSize,
+                        false);
+
                     string description =
                         BuildObservationDescription(
                             observation);
 
                     foreach (string line in
-                             WrapText(
-                                 description,
-                                 88))
+                             WrapText(description, 88))
                     {
+                        EnsureSpace(
+                            ref page,
+                            ref y,
+                            pages,
+                            30f);
+
                         AddText(
                             page,
                             ref y,
@@ -567,7 +672,7 @@ namespace PlaySense.Export
                 ref page,
                 ref y,
                 pages,
-                120f);
+                140f);
 
             AddSectionTitle(
                 page,
@@ -579,9 +684,7 @@ namespace PlaySense.Export
                     behaviour);
 
             foreach (string line in
-                     WrapText(
-                         behaviourContext,
-                         88))
+                     WrapText(behaviourContext, 88))
             {
                 EnsureSpace(
                     ref page,
@@ -596,8 +699,6 @@ namespace PlaySense.Export
                     FontSize,
                     false);
             }
-
-            y -= 15f;
 
             // =================================================
             // FOOTER
@@ -632,6 +733,741 @@ namespace PlaySense.Export
         }
 
         // =====================================================
+        // MOVEMENT CHART
+        // =====================================================
+
+        private static void DrawMovementChart(
+            StringBuilder page,
+            ref float y,
+            SessionData session)
+        {
+            if (session == null ||
+                session.Frames == null ||
+                session.Frames.Count < 2)
+            {
+                AddText(
+                    page,
+                    ref y,
+                    "Not enough movement data was recorded to generate a chart.",
+                    FontSize,
+                    false);
+                return;
+            }
+
+            float chartX =
+                MarginLeft + 35f;
+
+            float chartY =
+                y - 110f;
+
+            float chartWidth =
+                PageWidth -
+                MarginLeft -
+                80f;
+
+            float chartHeight = 105f;
+
+            List<float> times =
+                new List<float>();
+
+            List<float> speeds =
+                new List<float>();
+
+            for (int i = 1;
+                 i < session.Frames.Count;
+                 i++)
+            {
+                FrameData previous =
+                    session.Frames[i - 1];
+
+                FrameData current =
+                    session.Frames[i];
+
+                if (previous == null ||
+                    current == null)
+                    continue;
+
+                float deltaTime =
+                    current.Timestamp -
+                    previous.Timestamp;
+
+                if (deltaTime <= 0f)
+                    continue;
+
+                Vector2 previousXZ =
+                    new Vector2(
+                        previous.Position.x,
+                        previous.Position.z);
+
+                Vector2 currentXZ =
+                    new Vector2(
+                        current.Position.x,
+                        current.Position.z);
+
+                float distance =
+                    Vector2.Distance(
+                        previousXZ,
+                        currentXZ);
+
+                float speed =
+                    distance / deltaTime;
+
+                if (float.IsNaN(speed) ||
+                    float.IsInfinity(speed))
+                    continue;
+
+                times.Add(current.Timestamp);
+                speeds.Add(speed);
+            }
+
+            if (speeds.Count < 2)
+            {
+                AddText(
+                    page,
+                    ref y,
+                    "Not enough valid movement samples were recorded to generate a chart.",
+                    FontSize,
+                    false);
+                return;
+            }
+
+            float minTime =
+                times[0];
+
+            float maxTime =
+                times[times.Count - 1];
+
+            float maxSpeed = 0f;
+
+            for (int i = 0;
+                 i < speeds.Count;
+                 i++)
+            {
+                maxSpeed =
+                    Mathf.Max(
+                        maxSpeed,
+                        speeds[i]);
+            }
+
+            if (maxSpeed <= 0f)
+                maxSpeed = 1f;
+
+            maxSpeed *= 1.10f;
+
+            float timeRange =
+                maxTime - minTime;
+
+            if (timeRange <= 0f)
+                timeRange = 1f;
+
+            DrawChartBackground(
+                page,
+                chartX,
+                chartY,
+                chartWidth,
+                chartHeight);
+
+            DrawChartGrid(
+                page,
+                chartX,
+                chartY,
+                chartWidth,
+                chartHeight);
+
+            DrawChartAxes(
+                page,
+                chartX,
+                chartY,
+                chartWidth,
+                chartHeight);
+
+            bool firstPoint = true;
+
+            for (int i = 0;
+                 i < speeds.Count;
+                 i++)
+            {
+                float normalizedX =
+                    (times[i] - minTime) /
+                    timeRange;
+
+                float normalizedY =
+                    speeds[i] /
+                    maxSpeed;
+
+                float pointX =
+                    chartX +
+                    normalizedX *
+                    chartWidth;
+
+                float pointY =
+                    chartY +
+                    normalizedY *
+                    chartHeight;
+
+                if (firstPoint)
+                {
+                    page.AppendLine(
+                        $"{pointX:F1} {pointY:F1} m");
+
+                    firstPoint = false;
+                }
+                else
+                {
+                    page.AppendLine(
+                        $"{pointX:F1} {pointY:F1} l");
+                }
+            }
+
+            page.AppendLine("S");
+
+            AddChartLabel(
+                page,
+                chartX - 32f,
+                chartY + chartHeight - 3f,
+                $"{maxSpeed:F1} m/s");
+
+            AddChartLabel(
+                page,
+                chartX - 10f,
+                chartY - 3f,
+                "0");
+
+            AddChartLabel(
+                page,
+                chartX,
+                chartY - 16f,
+                $"{minTime:F1}s");
+
+            AddChartLabel(
+                page,
+                chartX + chartWidth - 25f,
+                chartY - 16f,
+                $"{maxTime:F1}s");
+
+            AddChartLabel(
+                page,
+                chartX + chartWidth / 2f - 20f,
+                chartY - 30f,
+                "Time (s)");
+
+            AddChartLabel(
+                page,
+                chartX - 5f,
+                chartY + chartHeight + 8f,
+                "Speed");
+
+            y =
+                chartY - 38f;
+        }
+
+        // =====================================================
+        // ATTENTION CHART
+        // =====================================================
+
+        private static void DrawAttentionChart(
+            StringBuilder page,
+            ref float y,
+            SessionData session)
+        {
+            if (session == null ||
+                session.BehaviourObservations == null ||
+                session.BehaviourObservations.Count == 0)
+            {
+                AddText(
+                    page,
+                    ref y,
+                    "No behavioural observations were recorded to generate an attention chart.",
+                    FontSize,
+                    false);
+                return;
+            }
+
+            List<BehaviourObservation> observations =
+                new List<BehaviourObservation>();
+
+            float minTime =
+                float.MaxValue;
+
+            float maxTime =
+                float.MinValue;
+
+            float maxDuration = 0f;
+
+            for (int i = 0;
+                 i < session.BehaviourObservations.Count;
+                 i++)
+            {
+                BehaviourObservation observation =
+                    session.BehaviourObservations[i];
+
+                if (observation == null ||
+                    !observation.Attended)
+                    continue;
+
+                observations.Add(observation);
+
+                minTime =
+                    Mathf.Min(
+                        minTime,
+                        observation.Timestamp);
+
+                maxTime =
+                    Mathf.Max(
+                        maxTime,
+                        observation.Timestamp +
+                        Mathf.Max(0f, observation.Duration));
+
+                maxDuration =
+                    Mathf.Max(
+                        maxDuration,
+                        Mathf.Max(0f, observation.Duration));
+            }
+
+            if (observations.Count == 0)
+            {
+                AddText(
+                    page,
+                    ref y,
+                    "No attended observations were recorded to generate an attention chart.",
+                    FontSize,
+                    false);
+                return;
+            }
+
+            if (maxTime <= minTime)
+                maxTime = minTime + 1f;
+
+            if (maxDuration <= 0f)
+                maxDuration = 1f;
+
+            float chartX =
+                MarginLeft + 35f;
+
+            float chartY =
+                y - 110f;
+
+            float chartWidth =
+                PageWidth -
+                MarginLeft -
+                80f;
+
+            float chartHeight = 105f;
+
+            DrawChartBackground(
+                page,
+                chartX,
+                chartY,
+                chartWidth,
+                chartHeight);
+
+            DrawChartGrid(
+                page,
+                chartX,
+                chartY,
+                chartWidth,
+                chartHeight);
+
+            DrawChartAxes(
+                page,
+                chartX,
+                chartY,
+                chartWidth,
+                chartHeight);
+
+            // -------------------------------------------------
+            // Attention duration bars
+            // -------------------------------------------------
+
+            for (int i = 0;
+                 i < observations.Count;
+                 i++)
+            {
+                BehaviourObservation observation =
+                    observations[i];
+
+                float start =
+                    observation.Timestamp;
+
+                float duration =
+                    Mathf.Max(
+                        0f,
+                        observation.Duration);
+
+                float end =
+                    start + duration;
+
+                float normalizedStart =
+                    Mathf.Clamp01(
+                        (start - minTime) /
+                        (maxTime - minTime));
+
+                float normalizedEnd =
+                    Mathf.Clamp01(
+                        (end - minTime) /
+                        (maxTime - minTime));
+
+                float barX =
+                    chartX +
+                    normalizedStart *
+                    chartWidth;
+
+                float barWidth =
+                    Mathf.Max(
+                        2f,
+                        (normalizedEnd -
+                         normalizedStart) *
+                        chartWidth);
+
+                float barY =
+                    chartY +
+                    15f +
+                    (i % 5) * 16f;
+
+                page.AppendLine("q");
+                page.AppendLine("0.35 g");
+                page.AppendLine(
+                    $"{barX:F1} {barY:F1} " +
+                    $"{Mathf.Min(barWidth, chartWidth):F1} 10 re");
+                page.AppendLine("f");
+                page.AppendLine("Q");
+            }
+
+            AddChartLabel(
+                page,
+                chartX - 32f,
+                chartY + chartHeight - 3f,
+                $"{maxDuration:F1}s");
+
+            AddChartLabel(
+                page,
+                chartX - 10f,
+                chartY - 3f,
+                "0");
+
+            AddChartLabel(
+                page,
+                chartX,
+                chartY - 16f,
+                $"{minTime:F1}s");
+
+            AddChartLabel(
+                page,
+                chartX + chartWidth - 25f,
+                chartY - 16f,
+                $"{maxTime:F1}s");
+
+            AddChartLabel(
+                page,
+                chartX + chartWidth / 2f - 20f,
+                chartY - 30f,
+                "Time (s)");
+
+            AddChartLabel(
+                page,
+                chartX - 5f,
+                chartY + chartHeight + 8f,
+                "Attention");
+
+            y =
+                chartY - 38f;
+        }
+
+        private static void DrawChartBackground(
+            StringBuilder page,
+            float chartX,
+            float chartY,
+            float chartWidth,
+            float chartHeight)
+        {
+            page.AppendLine("q");
+            page.AppendLine("0.95 g");
+
+            page.AppendLine(
+                $"{chartX:F1} {chartY:F1} " +
+                $"{chartWidth:F1} {chartHeight:F1} re");
+
+            page.AppendLine("f");
+            page.AppendLine("Q");
+        }
+
+        private static void DrawChartGrid(
+            StringBuilder page,
+            float chartX,
+            float chartY,
+            float chartWidth,
+            float chartHeight)
+        {
+            for (int i = 0; i <= 4; i++)
+            {
+                float gridY =
+                    chartY +
+                    (chartHeight / 4f) * i;
+
+                page.AppendLine(
+                    $"{chartX:F1} {gridY:F1} m " +
+                    $"{chartX + chartWidth:F1} {gridY:F1} l S");
+            }
+
+            for (int i = 0; i <= 4; i++)
+            {
+                float gridX =
+                    chartX +
+                    (chartWidth / 4f) * i;
+
+                page.AppendLine(
+                    $"{gridX:F1} {chartY:F1} m " +
+                    $"{gridX:F1} {chartY + chartHeight:F1} l S");
+            }
+        }
+
+        private static void DrawChartAxes(
+            StringBuilder page,
+            float chartX,
+            float chartY,
+            float chartWidth,
+            float chartHeight)
+        {
+            page.AppendLine(
+                $"{chartX:F1} {chartY:F1} m " +
+                $"{chartX + chartWidth:F1} {chartY:F1} l S");
+
+            page.AppendLine(
+                $"{chartX:F1} {chartY:F1} m " +
+                $"{chartX:F1} {chartY + chartHeight:F1} l S");
+        }
+
+        private static void AddChartLabel(
+            StringBuilder page,
+            float x,
+            float y,
+            string text)
+        {
+            string safeText =
+                EscapePdfText(text);
+
+            page.AppendLine(
+                $"BT /F1 7 Tf " +
+                $"{x:F1} {y:F1} Td " +
+                $"({safeText}) Tj ET");
+        }
+
+        // =====================================================
+        // DETAILED ATTENTION ANALYSIS
+        // =====================================================
+
+        private static void BuildDetailedAttentionAnalysis(
+            StringBuilder page,
+            ref float y,
+            List<string> pages,
+            AttentionAnalysis analysis)
+        {
+            EnsureSpace(ref page, ref y, pages, 210f);
+            AddSectionTitle(page, ref y, "DETAILED ATTENTION ANALYSIS");
+
+            if (analysis == null || analysis.TotalEpisodes <= 0)
+            {
+                AddText(page, ref y,
+                    "No attended observations were available for detailed attention analysis.",
+                    FontSize, false);
+                return;
+            }
+
+            AddText(page, ref y, $"Attention episodes: {analysis.TotalEpisodes}", FontSize, false);
+            AddText(page, ref y, $"Average episode duration: {analysis.AverageDuration:F2} seconds", FontSize, false);
+            AddText(page, ref y, $"Longest episode: {analysis.LongestDuration:F2} seconds", FontSize, false);
+            AddText(page, ref y, $"Unique attended objects: {analysis.UniqueObjects}", FontSize, false);
+            AddText(page, ref y, $"Reinspection episodes: {analysis.ReinspectionCount}", FontSize, false);
+
+            y -= 4f;
+            AddText(page, ref y, "Attention quality:", FontSize, true);
+            AddText(page, ref y, $"Brief (< 1s): {analysis.BriefEpisodes} episode(s), {analysis.BriefAttentionTime:F2}s total", FontSize, false);
+            AddText(page, ref y, $"Focused (1-3s): {analysis.FocusedEpisodes} episode(s), {analysis.FocusedAttentionTime:F2}s total", FontSize, false);
+            AddText(page, ref y, $"Sustained (>= 3s): {analysis.SustainedEpisodes} episode(s), {analysis.SustainedAttentionTime:F2}s total", FontSize, false);
+
+            y -= 4f;
+            AddText(page, ref y, "Attention switching:", FontSize, true);
+            AddText(page, ref y, $"Object switches: {analysis.AttentionSwitchCount}", FontSize, false);
+            AddText(page, ref y, $"Rapid switches (<= 1.5s gap): {analysis.RapidSwitchCount}", FontSize, false);
+            AddText(page, ref y, $"Longest attention gap: {analysis.LongestAttentionGap:F2} seconds", FontSize, false);
+
+            y -= 4f;
+            AddText(page, ref y, "Movement context during attention:", FontSize, true);
+            AddText(page, ref y, $"Stationary attention: {analysis.StationaryAttentionTime:F2}s across {analysis.StationaryAttentionEpisodes} episode(s)", FontSize, false);
+            AddText(page, ref y, $"Moving attention: {analysis.MovingAttentionTime:F2}s across {analysis.MovingAttentionEpisodes} episode(s)", FontSize, false);
+
+            y -= 4f;
+            AddText(page, ref y, "Object focus:", FontSize, true);
+            AddText(page, ref y, $"Most attended object: {Safe(analysis.MostAttendedObject, "None")}", FontSize, false);
+            if (!string.IsNullOrEmpty(analysis.MostAttendedObject))
+                AddText(page, ref y, $"Most attended object time: {analysis.MostAttendedObjectTime:F2}s ({analysis.MostAttendedObjectPercentage:F1}% of attention)", FontSize, false);
+            AddText(page, ref y, $"Longest single-object episode: {Safe(analysis.LongestAttendedObject, "None")} - {analysis.LongestAttendedObjectDuration:F2}s", FontSize, false);
+
+            if (analysis.Objects == null || analysis.Objects.Count == 0)
+                return;
+
+            y -= 8f;
+            AddText(page, ref y, "PER-OBJECT ATTENTION BREAKDOWN", 11f, true);
+
+            for (int i = 0; i < analysis.Objects.Count; i++)
+            {
+                AttentionObjectAnalysis objectAnalysis = analysis.Objects[i];
+                if (objectAnalysis == null) continue;
+
+                EnsureSpace(ref page, ref y, pages, 85f);
+                AddText(page, ref y,
+                    $"{i + 1}. {Safe(objectAnalysis.ObjectName, "Unknown object")}",
+                    FontSize, true);
+                AddText(page, ref y,
+                    $"Episodes: {objectAnalysis.EpisodeCount}   Total: {objectAnalysis.TotalAttentionTime:F2}s   Average: {objectAnalysis.AverageAttentionDuration:F2}s",
+                    FontSize, false);
+                AddText(page, ref y,
+                    $"Longest: {objectAnalysis.LongestAttentionDuration:F2}s   Share: {objectAnalysis.AttentionPercentage:F1}%   Reinspections: {objectAnalysis.ReinspectionCount}",
+                    FontSize, false);
+                y -= 4f;
+            }
+        }
+
+        // =====================================================
+        // ATTENTION FINDINGS
+        // =====================================================
+
+        private static void BuildAttentionFindings(
+            StringBuilder page,
+            ref float y,
+            List<string> pages,
+            BehaviourReport behaviour,
+            AttentionAnalysis attentionAnalysis)
+        {
+            if (behaviour == null)
+                return;
+
+            EnsureSpace(
+                ref page,
+                ref y,
+                pages,
+                100f);
+
+            AddSectionTitle(
+                page,
+                ref y,
+                "ATTENTION FINDINGS");
+
+            if (behaviour.AttentionCount <= 0)
+            {
+                AddText(
+                    page,
+                    ref y,
+                    "No attended objects were recorded.",
+                    FontSize,
+                    false);
+
+                return;
+            }
+
+            string finding =
+                $"The player generated {behaviour.AttentionCount} attention observation(s), " +
+                $"covering {behaviour.TotalAttentionTime:F2} seconds of recorded attention.";
+
+            AddWrappedFinding(
+                page,
+                ref y,
+                pages,
+                finding);
+
+            if (behaviour.UniqueAttendedObjects > 0)
+            {
+                AddWrappedFinding(
+                    page,
+                    ref y,
+                    pages,
+                    $"Attention was distributed across {behaviour.UniqueAttendedObjects} unique object(s).");
+            }
+
+            if (behaviour.ReinspectionCount > 0)
+            {
+                AddWrappedFinding(
+                    page,
+                    ref y,
+                    pages,
+                    $"The player revisited previously attended content {behaviour.ReinspectionCount} time(s), indicating repeated inspection.");
+            }
+
+            if (behaviour.LongestAttentionDuration >= 3f)
+            {
+                AddWrappedFinding(
+                    page,
+                    ref y,
+                    pages,
+                    $"The longest recorded attention episode lasted {behaviour.LongestAttentionDuration:F2} seconds, indicating sustained visual attention.");
+            }
+            else
+            {
+                AddWrappedFinding(
+                    page,
+                    ref y,
+                    pages,
+                    "Attention episodes were generally brief, with no sustained attention episode reaching three seconds.");
+            }
+
+        if (attentionAnalysis != null && attentionAnalysis.TotalEpisodes > 0)
+        {
+            if (attentionAnalysis.AttentionSwitchCount > 0)
+            {
+                AddWrappedFinding(page, ref y, pages,
+                    $"The player switched between attended objects {attentionAnalysis.AttentionSwitchCount} time(s), including {attentionAnalysis.RapidSwitchCount} rapid switch(es).");
+            }
+
+            if (attentionAnalysis.StationaryAttentionTime > attentionAnalysis.MovingAttentionTime)
+            {
+                AddWrappedFinding(page, ref y, pages,
+                    $"Most recorded attention occurred while the player was relatively stationary ({attentionAnalysis.StationaryAttentionTime:F2}s stationary versus {attentionAnalysis.MovingAttentionTime:F2}s while moving).");
+            }
+            else if (attentionAnalysis.MovingAttentionTime > 0f)
+            {
+                AddWrappedFinding(page, ref y, pages,
+                    $"Recorded attention occurred primarily during movement ({attentionAnalysis.MovingAttentionTime:F2}s while moving versus {attentionAnalysis.StationaryAttentionTime:F2}s while stationary).");
+            }
+
+            if (!string.IsNullOrEmpty(attentionAnalysis.MostAttendedObject))
+            {
+                AddWrappedFinding(page, ref y, pages,
+                    $"The most attended object was {attentionAnalysis.MostAttendedObject}, receiving {attentionAnalysis.MostAttendedObjectTime:F2}s of attention ({attentionAnalysis.MostAttendedObjectPercentage:F1}% of recorded attention).");
+            }
+        }
+
+        }
+
+        private static void AddWrappedFinding(
+            StringBuilder page,
+            ref float y,
+            List<string> pages,
+            string text)
+        {
+            bool firstLine = true;
+
+            foreach (string line in WrapText(text, 84))
+            {
+                EnsureSpace(
+                    ref page,
+                    ref y,
+                    pages,
+                    30f);
+
+                AddText(
+                    page,
+                    ref y,
+                    firstLine ? "- " + line : "  " + line,
+                    FontSize,
+                    false);
+
+                firstLine = false;
+            }
+
+            y -= 3f;
+        }
+
+        // =====================================================
         // BEHAVIOURAL CONTEXT
         // =====================================================
 
@@ -639,10 +1475,7 @@ namespace PlaySense.Export
             BehaviourReport behaviour)
         {
             if (behaviour == null)
-            {
-                return
-                    "Behavioural analysis was unavailable.";
-            }
+                return "Behavioural analysis was unavailable.";
 
             StringBuilder result =
                 new StringBuilder();
@@ -672,6 +1505,32 @@ namespace PlaySense.Export
             {
                 result.Append(
                     "Movement was relatively continuous, with few distinct starts and stops. ");
+            }
+
+            if (behaviour.AttentionCount > 0)
+            {
+                result.Append(
+                    $"{behaviour.AttentionCount} attention observation(s) were recorded, " +
+                    $"covering {behaviour.TotalAttentionTime:F2} seconds");
+
+                if (behaviour.UniqueAttendedObjects > 0)
+                {
+                    result.Append(
+                        $" across {behaviour.UniqueAttendedObjects} unique object(s)");
+                }
+
+                result.Append(". ");
+
+                if (behaviour.ReinspectionCount > 0)
+                {
+                    result.Append(
+                        $"The player returned to previously attended content {behaviour.ReinspectionCount} time(s). ");
+                }
+            }
+            else
+            {
+                result.Append(
+                    "No attended objects were recorded, so attention-level behavioural analysis is limited. ");
             }
 
             if (behaviour.EventCount > 0)
@@ -706,18 +1565,14 @@ namespace PlaySense.Export
             BehaviourObservation observation)
         {
             if (observation == null)
-            {
-                return
-                    "Behavioural observation was unavailable.";
-            }
+                return "Behavioural observation was unavailable.";
 
             string subject =
                 Safe(
                     observation.Subject,
                     "the object");
 
-            if (observation.Type ==
-                "ObjectAttended")
+            if (observation.Attended)
             {
                 return
                     $"The player visually attended to {subject} " +
@@ -729,6 +1584,25 @@ namespace PlaySense.Export
             return
                 $"PlaySense recorded {Safe(observation.Type, "a behavioural observation")} " +
                 $"involving {subject} for {observation.Duration:F2} seconds.";
+        }
+
+        // =====================================================
+        // SESSION HELPERS
+        // =====================================================
+
+        private static float GetSessionDuration(
+            SessionData session)
+        {
+            if (session == null)
+                return 0f;
+
+            if (session.Duration > 0f)
+                return session.Duration;
+
+            if (session.Metrics.Duration > 0f)
+                return session.Metrics.Duration;
+
+            return 0f;
         }
 
         // =====================================================
@@ -766,9 +1640,8 @@ namespace PlaySense.Export
             string safeText =
                 EscapePdfText(text);
 
-            // Current PDF implementation uses Helvetica.
-            // Bold flag is retained for future font support.
-            string fontName = "/F1";
+            string fontName =
+                "/F1";
 
             page.AppendLine(
                 $"BT {fontName} {fontSize:F1} Tf " +
@@ -788,12 +1661,8 @@ namespace PlaySense.Export
             List<string> pages,
             float requiredSpace)
         {
-            if (y >=
-                MarginBottom +
-                requiredSpace)
-            {
+            if (y >= MarginBottom + requiredSpace)
                 return;
-            }
 
             FinishPage(page);
 
@@ -804,8 +1673,7 @@ namespace PlaySense.Export
                 CreatePage();
 
             y =
-                PageHeight -
-                MarginTop;
+                PageHeight - MarginTop;
 
             AddText(
                 page,
@@ -856,10 +1724,6 @@ namespace PlaySense.Export
             {
                 switch (c)
                 {
-                    // -----------------------------------------
-                    // PDF special characters
-                    // -----------------------------------------
-
                     case '\\':
                         result.Append("\\\\");
                         break;
@@ -872,21 +1736,11 @@ namespace PlaySense.Export
                         result.Append("\\)");
                         break;
 
-                    // -----------------------------------------
-                    // Whitespace
-                    // -----------------------------------------
-
                     case '\r':
                     case '\n':
                     case '\t':
                         result.Append(" ");
                         break;
-
-                    // -----------------------------------------
-                    // Unicode punctuation
-                    // Convert to ASCII equivalents because
-                    // the PDF is currently ASCII/Helvetica.
-                    // -----------------------------------------
 
                     case '—':
                     case '–':
@@ -914,33 +1768,15 @@ namespace PlaySense.Export
                         result.Append(">");
                         break;
 
-                    // -----------------------------------------
-                    // Degree symbol
-                    // -----------------------------------------
-
                     case '°':
                         result.Append(" deg");
                         break;
 
-                    // -----------------------------------------
-                    // Normal ASCII characters
-                    // -----------------------------------------
-
                     default:
-
-                        if (c >= 32 &&
-                            c <= 126)
-                        {
+                        if (c >= 32 && c <= 126)
                             result.Append(c);
-                        }
                         else
-                        {
-                            // Ignore unsupported Unicode
-                            // characters instead of corrupting
-                            // the PDF stream.
                             result.Append("?");
-                        }
-
                         break;
                 }
             }
@@ -1061,7 +1897,7 @@ namespace PlaySense.Export
                 new List<int>();
 
             // -------------------------------------------------
-            // Create page objects
+            // Page objects
             // -------------------------------------------------
 
             foreach (string pageContent in pages)
@@ -1085,9 +1921,7 @@ namespace PlaySense.Export
                     "\nendstream";
 
                 while (objects.Count < contentId)
-                {
                     objects.Add("");
-                }
 
                 objects[contentId - 1] =
                     contentObject;
@@ -1102,9 +1936,7 @@ namespace PlaySense.Export
                     $"/Contents {contentId} 0 R >>";
 
                 while (objects.Count < pageId)
-                {
                     objects.Add("");
-                }
 
                 objects[pageId - 1] =
                     pageObject;
@@ -1118,8 +1950,7 @@ namespace PlaySense.Export
                 string.Join(
                     " ",
                     pageObjectIds.ConvertAll(
-                        id =>
-                            $"{id} 0 R"));
+                        id => $"{id} 0 R"));
 
             objects[1] =
                 "<< /Type /Pages " +
@@ -1157,10 +1988,6 @@ namespace PlaySense.Export
                     "endobj");
             }
 
-            // -------------------------------------------------
-            // Cross-reference table
-            // -------------------------------------------------
-
             long xrefPosition =
                 Encoding.ASCII.GetByteCount(
                     pdf.ToString());
@@ -1179,10 +2006,6 @@ namespace PlaySense.Export
                 pdf.AppendLine(
                     $"{offset:D10} 00000 n ");
             }
-
-            // -------------------------------------------------
-            // Trailer
-            // -------------------------------------------------
 
             pdf.AppendLine(
                 "trailer");

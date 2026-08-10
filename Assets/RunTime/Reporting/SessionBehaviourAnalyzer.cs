@@ -5,8 +5,13 @@ using PlaySense.Data.Models;
 
 namespace PlaySense.Reporting
 {
+    [Serializable]
     public class BehaviourReport
     {
+        // =====================================================
+        // MOVEMENT
+        // =====================================================
+
         public float TotalDistance;
         public float AverageSpeed;
         public float PeakSpeed;
@@ -18,6 +23,11 @@ namespace PlaySense.Reporting
         public float IdlePercentage;
 
         public int MovementSegments;
+
+        // =====================================================
+        // EVENTS
+        // =====================================================
+
         public int EventCount;
 
         public string FirstEvent;
@@ -26,6 +36,26 @@ namespace PlaySense.Reporting
 
         public float LongestEventGap;
 
+        // =====================================================
+        // ATTENTION
+        // =====================================================
+
+        public int AttentionCount;
+
+        public float TotalAttentionTime;
+
+        public float AverageAttentionDuration;
+
+        public float LongestAttentionDuration;
+
+        public int UniqueAttendedObjects;
+
+        public int ReinspectionCount;
+
+        // =====================================================
+        // FINDINGS
+        // =====================================================
+
         public List<string> Findings =
             new List<string>();
     }
@@ -33,6 +63,10 @@ namespace PlaySense.Reporting
     public class SessionBehaviourAnalyzer
     {
         private const float IdleSpeedThreshold = 0.08f;
+
+        // =====================================================
+        // PUBLIC ANALYSIS
+        // =====================================================
 
         public BehaviourReport Analyze(
             SessionData session)
@@ -62,6 +96,10 @@ namespace PlaySense.Reporting
                 session,
                 report);
 
+            AnalyzeAttention(
+                session,
+                report);
+
             BuildFindings(
                 session,
                 report);
@@ -82,14 +120,24 @@ namespace PlaySense.Reporting
             {
                 report.ActiveTime = 0f;
                 report.IdleTime =
-                    session.Duration;
+                    Mathf.Max(
+                        0f,
+                        session.Duration);
+
+                report.ActivePercentage = 0f;
+                report.IdlePercentage =
+                    session.Duration > 0f
+                        ? 100f
+                        : 0f;
+
+                report.PeakSpeed = 0f;
+                report.MovementSegments = 0;
 
                 return;
             }
 
             float activeTime = 0f;
             float idleTime = 0f;
-
             float peakSpeed = 0f;
 
             int movementSegments = 0;
@@ -105,6 +153,12 @@ namespace PlaySense.Reporting
 
                 FrameData current =
                     session.Frames[i];
+
+                if (previous == null ||
+                    current == null)
+                {
+                    continue;
+                }
 
                 float deltaTime =
                     current.Timestamp -
@@ -149,8 +203,12 @@ namespace PlaySense.Reporting
                 activeTime + idleTime;
 
             if (analysedTime <= 0f)
+            {
                 analysedTime =
-                    session.Duration;
+                    Mathf.Max(
+                        0f,
+                        session.Duration);
+            }
 
             report.ActiveTime =
                 activeTime;
@@ -176,6 +234,11 @@ namespace PlaySense.Reporting
                     analysedTime *
                     100f;
             }
+            else
+            {
+                report.ActivePercentage = 0f;
+                report.IdlePercentage = 0f;
+            }
         }
 
         // =====================================================
@@ -189,6 +252,11 @@ namespace PlaySense.Reporting
             if (session.Events == null ||
                 session.Events.Count == 0)
             {
+                report.FirstEvent = string.Empty;
+                report.LastEvent = string.Empty;
+                report.MostFrequentCategory = "None";
+                report.LongestEventGap = 0f;
+
                 return;
             }
 
@@ -200,15 +268,21 @@ namespace PlaySense.Reporting
                     session.Events.Count - 1];
 
             report.FirstEvent =
-                FormatEvent(first);
+                first == null
+                    ? string.Empty
+                    : FormatEvent(first);
 
             report.LastEvent =
-                FormatEvent(last);
+                last == null
+                    ? string.Empty
+                    : FormatEvent(last);
 
             Dictionary<string, int> categories =
                 new Dictionary<string, int>();
 
             float longestGap = 0f;
+
+            float previousTimestamp = -1f;
 
             for (int i = 0;
                  i < session.Events.Count;
@@ -216,6 +290,9 @@ namespace PlaySense.Reporting
             {
                 GameEventData gameEvent =
                     session.Events[i];
+
+                if (gameEvent == null)
+                    continue;
 
                 string category =
                     string.IsNullOrEmpty(
@@ -228,17 +305,23 @@ namespace PlaySense.Reporting
 
                 categories[category]++;
 
-                if (i > 0)
+                if (previousTimestamp >= 0f)
                 {
                     float gap =
                         gameEvent.Timestamp -
-                        session.Events[i - 1].Timestamp;
+                        previousTimestamp;
 
-                    longestGap =
-                        Mathf.Max(
-                            longestGap,
-                            gap);
+                    if (gap >= 0f)
+                    {
+                        longestGap =
+                            Mathf.Max(
+                                longestGap,
+                                gap);
+                    }
                 }
+
+                previousTimestamp =
+                    gameEvent.Timestamp;
             }
 
             report.LongestEventGap =
@@ -249,7 +332,8 @@ namespace PlaySense.Reporting
 
             int highestCount = 0;
 
-            foreach (var pair in categories)
+            foreach (KeyValuePair<string, int> pair
+                     in categories)
             {
                 if (pair.Value > highestCount)
                 {
@@ -266,6 +350,111 @@ namespace PlaySense.Reporting
         }
 
         // =====================================================
+        // ATTENTION
+        // =====================================================
+
+        private void AnalyzeAttention(
+            SessionData session,
+            BehaviourReport report)
+        {
+            report.AttentionCount = 0;
+            report.TotalAttentionTime = 0f;
+            report.AverageAttentionDuration = 0f;
+            report.LongestAttentionDuration = 0f;
+            report.UniqueAttendedObjects = 0;
+            report.ReinspectionCount = 0;
+
+            if (session == null ||
+                session.BehaviourObservations == null ||
+                session.BehaviourObservations.Count == 0)
+            {
+                return;
+            }
+
+            HashSet<string> attendedObjects =
+                new HashSet<string>();
+
+            float totalDuration = 0f;
+
+            for (int i = 0;
+                 i < session.BehaviourObservations.Count;
+                 i++)
+            {
+                BehaviourObservation observation =
+                    session.BehaviourObservations[i];
+
+                if (observation == null)
+                    continue;
+
+                // -------------------------------------------------
+                // ATTENTION FILTER
+                // -------------------------------------------------
+
+                if (!observation.Attended)
+                    continue;
+
+                // -------------------------------------------------
+                // COUNT
+                // -------------------------------------------------
+
+                report.AttentionCount++;
+
+                // -------------------------------------------------
+                // DURATION
+                // -------------------------------------------------
+
+                float duration =
+                    Mathf.Max(
+                        0f,
+                        observation.Duration);
+
+                totalDuration +=
+                    duration;
+
+                report.TotalAttentionTime +=
+                    duration;
+
+                report.LongestAttentionDuration =
+                    Mathf.Max(
+                        report.LongestAttentionDuration,
+                        duration);
+
+                // -------------------------------------------------
+                // UNIQUE OBJECT
+                // -------------------------------------------------
+
+                if (!string.IsNullOrWhiteSpace(
+                    observation.Subject))
+                {
+                    attendedObjects.Add(
+                        observation.Subject);
+                }
+
+                // -------------------------------------------------
+                // REINSPECTION
+                // -------------------------------------------------
+
+                if (string.Equals(
+                    observation.Type,
+                    "Reinspection",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    report.ReinspectionCount++;
+                }
+            }
+
+            report.UniqueAttendedObjects =
+                attendedObjects.Count;
+
+            if (report.AttentionCount > 0)
+            {
+                report.AverageAttentionDuration =
+                    totalDuration /
+                    report.AttentionCount;
+            }
+        }
+
+        // =====================================================
         // FINDINGS
         // =====================================================
 
@@ -275,12 +464,15 @@ namespace PlaySense.Reporting
         {
             report.Findings.Clear();
 
-            if (session.Duration <= 0f)
+            if (session == null ||
+                session.Duration <= 0f)
+            {
                 return;
+            }
 
-            // -------------------------------------------------
-            // Activity
-            // -------------------------------------------------
+            // =================================================
+            // MOVEMENT FINDINGS
+            // =================================================
 
             if (report.ActivePercentage >= 80f)
             {
@@ -298,29 +490,17 @@ namespace PlaySense.Reporting
                     $"The player showed a mixed movement pattern, with {report.ActivePercentage:F0}% of the session classified as active movement.");
             }
 
-            // -------------------------------------------------
-            // Idle behaviour
-            // -------------------------------------------------
-
             if (report.IdleTime >= 5f)
             {
                 report.Findings.Add(
                     $"The player spent approximately {report.IdleTime:F1} seconds with minimal movement.");
             }
 
-            // -------------------------------------------------
-            // Speed
-            // -------------------------------------------------
-
             if (report.PeakSpeed > 0f)
             {
                 report.Findings.Add(
                     $"Peak recorded movement speed was {report.PeakSpeed:F2} m/s, compared with an average of {report.AverageSpeed:F2} m/s.");
             }
-
-            // -------------------------------------------------
-            // Exploration
-            // -------------------------------------------------
 
             if (report.MovementSegments >= 5)
             {
@@ -333,9 +513,9 @@ namespace PlaySense.Reporting
                     "The player maintained a relatively continuous movement pattern with few starts and stops.");
             }
 
-            // -------------------------------------------------
-            // Events
-            // -------------------------------------------------
+            // =================================================
+            // EVENT FINDINGS
+            // =================================================
 
             if (report.EventCount == 0)
             {
@@ -356,14 +536,40 @@ namespace PlaySense.Reporting
                 }
             }
 
-            // -------------------------------------------------
-            // Event gaps
-            // -------------------------------------------------
-
             if (report.LongestEventGap >= 10f)
             {
                 report.Findings.Add(
                     $"There was a {report.LongestEventGap:F1}-second gap between recorded gameplay events.");
+            }
+
+            // =================================================
+            // ATTENTION FINDINGS
+            // =================================================
+
+            if (report.AttentionCount == 0)
+            {
+                report.Findings.Add(
+                    "No attended objects were recorded, so visual-attention analysis is limited.");
+            }
+            else
+            {
+                report.Findings.Add(
+                    $"{report.AttentionCount} attention sequence(s) were recorded across {report.UniqueAttendedObjects} unique object(s).");
+
+                report.Findings.Add(
+                    $"The player spent {report.TotalAttentionTime:F1} seconds in recorded visual attention, with an average attention duration of {report.AverageAttentionDuration:F1} seconds.");
+
+                if (report.LongestAttentionDuration >= 3f)
+                {
+                    report.Findings.Add(
+                        $"The longest recorded attention sequence lasted {report.LongestAttentionDuration:F1} seconds, indicating sustained attention to at least one object.");
+                }
+
+                if (report.ReinspectionCount > 0)
+                {
+                    report.Findings.Add(
+                        $"The player returned to previously inspected content {report.ReinspectionCount} time(s), indicating repeated visual inspection.");
+                }
             }
         }
 
@@ -374,6 +580,9 @@ namespace PlaySense.Reporting
         private string FormatEvent(
             GameEventData gameEvent)
         {
+            if (gameEvent == null)
+                return string.Empty;
+
             string category =
                 string.IsNullOrEmpty(
                     gameEvent.Category)
