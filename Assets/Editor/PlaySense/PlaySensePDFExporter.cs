@@ -81,12 +81,6 @@ namespace PlaySense.Export
             BehaviourReport behaviour =
                 analyzer.Analyze(session);
 
-            SessionAttentionAnalyzer attentionAnalyzer =
-                new SessionAttentionAnalyzer();
-
-            AttentionAnalysis attentionAnalysis =
-                attentionAnalyzer.Analyze(session);
-
             if (behaviour == null)
             {
                 Debug.LogError(
@@ -95,10 +89,7 @@ namespace PlaySense.Export
             }
 
             List<string> pages =
-                BuildPages(
-                session,
-                behaviour,
-                attentionAnalysis);
+                BuildPages(session, behaviour);
 
             if (pages == null || pages.Count == 0)
             {
@@ -141,8 +132,7 @@ namespace PlaySense.Export
 
         private static List<string> BuildPages(
             SessionData session,
-            BehaviourReport behaviour,
-            AttentionAnalysis attentionAnalysis)
+            BehaviourReport behaviour)
         {
             List<string> pages =
                 new List<string>();
@@ -379,16 +369,6 @@ namespace PlaySense.Export
             y -= 12f;
 
             // =================================================
-            // DETAILED ATTENTION ANALYSIS
-            // =================================================
-
-            BuildDetailedAttentionAnalysis(
-                page,
-                ref y,
-                pages,
-                attentionAnalysis);
-
-            // =================================================
             // MOVEMENT CHART
             // =================================================
 
@@ -493,8 +473,7 @@ namespace PlaySense.Export
                 page,
                 ref y,
                 pages,
-                behaviour,
-                attentionAnalysis);
+                behaviour);
 
             y -= 10f;
 
@@ -1253,82 +1232,6 @@ namespace PlaySense.Export
         }
 
         // =====================================================
-        // DETAILED ATTENTION ANALYSIS
-        // =====================================================
-
-        private static void BuildDetailedAttentionAnalysis(
-            StringBuilder page,
-            ref float y,
-            List<string> pages,
-            AttentionAnalysis analysis)
-        {
-            EnsureSpace(ref page, ref y, pages, 210f);
-            AddSectionTitle(page, ref y, "DETAILED ATTENTION ANALYSIS");
-
-            if (analysis == null || analysis.TotalEpisodes <= 0)
-            {
-                AddText(page, ref y,
-                    "No attended observations were available for detailed attention analysis.",
-                    FontSize, false);
-                return;
-            }
-
-            AddText(page, ref y, $"Attention episodes: {analysis.TotalEpisodes}", FontSize, false);
-            AddText(page, ref y, $"Average episode duration: {analysis.AverageDuration:F2} seconds", FontSize, false);
-            AddText(page, ref y, $"Longest episode: {analysis.LongestDuration:F2} seconds", FontSize, false);
-            AddText(page, ref y, $"Unique attended objects: {analysis.UniqueObjects}", FontSize, false);
-            AddText(page, ref y, $"Reinspection episodes: {analysis.ReinspectionCount}", FontSize, false);
-
-            y -= 4f;
-            AddText(page, ref y, "Attention quality:", FontSize, true);
-            AddText(page, ref y, $"Brief (< 1s): {analysis.BriefEpisodes} episode(s), {analysis.BriefAttentionTime:F2}s total", FontSize, false);
-            AddText(page, ref y, $"Focused (1-3s): {analysis.FocusedEpisodes} episode(s), {analysis.FocusedAttentionTime:F2}s total", FontSize, false);
-            AddText(page, ref y, $"Sustained (>= 3s): {analysis.SustainedEpisodes} episode(s), {analysis.SustainedAttentionTime:F2}s total", FontSize, false);
-
-            y -= 4f;
-            AddText(page, ref y, "Attention switching:", FontSize, true);
-            AddText(page, ref y, $"Object switches: {analysis.AttentionSwitchCount}", FontSize, false);
-            AddText(page, ref y, $"Rapid switches (<= 1.5s gap): {analysis.RapidSwitchCount}", FontSize, false);
-            AddText(page, ref y, $"Longest attention gap: {analysis.LongestAttentionGap:F2} seconds", FontSize, false);
-
-            y -= 4f;
-            AddText(page, ref y, "Movement context during attention:", FontSize, true);
-            AddText(page, ref y, $"Stationary attention: {analysis.StationaryAttentionTime:F2}s across {analysis.StationaryAttentionEpisodes} episode(s)", FontSize, false);
-            AddText(page, ref y, $"Moving attention: {analysis.MovingAttentionTime:F2}s across {analysis.MovingAttentionEpisodes} episode(s)", FontSize, false);
-
-            y -= 4f;
-            AddText(page, ref y, "Object focus:", FontSize, true);
-            AddText(page, ref y, $"Most attended object: {Safe(analysis.MostAttendedObject, "None")}", FontSize, false);
-            if (!string.IsNullOrEmpty(analysis.MostAttendedObject))
-                AddText(page, ref y, $"Most attended object time: {analysis.MostAttendedObjectTime:F2}s ({analysis.MostAttendedObjectPercentage:F1}% of attention)", FontSize, false);
-            AddText(page, ref y, $"Longest single-object episode: {Safe(analysis.LongestAttendedObject, "None")} - {analysis.LongestAttendedObjectDuration:F2}s", FontSize, false);
-
-            if (analysis.Objects == null || analysis.Objects.Count == 0)
-                return;
-
-            y -= 8f;
-            AddText(page, ref y, "PER-OBJECT ATTENTION BREAKDOWN", 11f, true);
-
-            for (int i = 0; i < analysis.Objects.Count; i++)
-            {
-                AttentionObjectAnalysis objectAnalysis = analysis.Objects[i];
-                if (objectAnalysis == null) continue;
-
-                EnsureSpace(ref page, ref y, pages, 85f);
-                AddText(page, ref y,
-                    $"{i + 1}. {Safe(objectAnalysis.ObjectName, "Unknown object")}",
-                    FontSize, true);
-                AddText(page, ref y,
-                    $"Episodes: {objectAnalysis.EpisodeCount}   Total: {objectAnalysis.TotalAttentionTime:F2}s   Average: {objectAnalysis.AverageAttentionDuration:F2}s",
-                    FontSize, false);
-                AddText(page, ref y,
-                    $"Longest: {objectAnalysis.LongestAttentionDuration:F2}s   Share: {objectAnalysis.AttentionPercentage:F1}%   Reinspections: {objectAnalysis.ReinspectionCount}",
-                    FontSize, false);
-                y -= 4f;
-            }
-        }
-
-        // =====================================================
         // ATTENTION FINDINGS
         // =====================================================
 
@@ -1336,8 +1239,7 @@ namespace PlaySense.Export
             StringBuilder page,
             ref float y,
             List<string> pages,
-            BehaviourReport behaviour,
-            AttentionAnalysis attentionAnalysis)
+            BehaviourReport behaviour)
         {
             if (behaviour == null)
                 return;
@@ -1409,33 +1311,6 @@ namespace PlaySense.Export
                     pages,
                     "Attention episodes were generally brief, with no sustained attention episode reaching three seconds.");
             }
-
-        if (attentionAnalysis != null && attentionAnalysis.TotalEpisodes > 0)
-        {
-            if (attentionAnalysis.AttentionSwitchCount > 0)
-            {
-                AddWrappedFinding(page, ref y, pages,
-                    $"The player switched between attended objects {attentionAnalysis.AttentionSwitchCount} time(s), including {attentionAnalysis.RapidSwitchCount} rapid switch(es).");
-            }
-
-            if (attentionAnalysis.StationaryAttentionTime > attentionAnalysis.MovingAttentionTime)
-            {
-                AddWrappedFinding(page, ref y, pages,
-                    $"Most recorded attention occurred while the player was relatively stationary ({attentionAnalysis.StationaryAttentionTime:F2}s stationary versus {attentionAnalysis.MovingAttentionTime:F2}s while moving).");
-            }
-            else if (attentionAnalysis.MovingAttentionTime > 0f)
-            {
-                AddWrappedFinding(page, ref y, pages,
-                    $"Recorded attention occurred primarily during movement ({attentionAnalysis.MovingAttentionTime:F2}s while moving versus {attentionAnalysis.StationaryAttentionTime:F2}s while stationary).");
-            }
-
-            if (!string.IsNullOrEmpty(attentionAnalysis.MostAttendedObject))
-            {
-                AddWrappedFinding(page, ref y, pages,
-                    $"The most attended object was {attentionAnalysis.MostAttendedObject}, receiving {attentionAnalysis.MostAttendedObjectTime:F2}s of attention ({attentionAnalysis.MostAttendedObjectPercentage:F1}% of recorded attention).");
-            }
-        }
-
         }
 
         private static void AddWrappedFinding(
