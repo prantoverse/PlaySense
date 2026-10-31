@@ -52,6 +52,21 @@ namespace PlaySense.Attention
             }
         }
 
+        /// <summary>
+        /// Sets the name and category from code, e.g. when tagging spawned enemies at runtime.
+        /// Pass null to leave a value unchanged.
+        /// </summary>
+        public PlaySenseTarget Configure(string newDisplayName, string newCategory)
+        {
+            if (newDisplayName != null)
+                displayName = newDisplayName;
+
+            if (newCategory != null)
+                category = newCategory;
+
+            return this;
+        }
+
         private void OnTransformParentChanged()
         {
             _id = null;
