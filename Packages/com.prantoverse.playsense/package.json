@@ -1,0 +1,25 @@
+{
+  "name": "com.prantoverse.playsense",
+  "version": "0.2.0",
+  "displayName": "PlaySense",
+  "description": "Lightweight playtesting toolkit for Unity. Records where players go, what they look at and what they do, then turns sessions into a dashboard, Scene-view replay with heatmaps, and PDF reports.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Pranto",
+    "url": "https://github.com/prantoverse"
+  },
+  "license": "See LICENSE.md",
+  "keywords": [
+    "playtesting",
+    "analytics",
+    "telemetry",
+    "heatmap",
+    "replay",
+    "ux research"
+  ],
+  "dependencies": {
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.jsonserialize": "1.0.0",
+    "com.unity.modules.imgui": "1.0.0"
+  }
+}
