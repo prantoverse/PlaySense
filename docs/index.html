@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PlaySense: free playtesting and player analytics for Unity</title>
+<meta name="description" content="PlaySense is a free, open-source Unity package for playtesting. Record where players go, what they look at and what they do, then see heatmaps, replays and reports across all your playtesters.">
+<meta name="keywords" content="Unity playtesting, Unity analytics, game heatmap, player telemetry, playtest tool, Unity package, game UX research, level design analytics">
+<link rel="canonical" href="https://prantoverse.github.io/PlaySense/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='1' y='1' width='26' height='26' rx='7' fill='%23142037'/%3E%3Crect x='6' y='15' width='5' height='5' rx='1' fill='%233d6ff5'/%3E%3Crect x='11' y='10' width='5' height='5' rx='1' fill='%23f5d228'/%3E%3Crect x='16' y='6' width='6' height='6' rx='1.2' fill='%23ee4a22'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#142037">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="PlaySense">
+<meta property="og:title" content="PlaySense: watch how people actually play your game">
+<meta property="og:description" content="PlaySense is a free, open-source Unity package for playtesting. Record where players go, what they look at and what they do, then see heatmaps, replays and reports across all your playtesters.">
+<meta property="og:url" content="https://prantoverse.github.io/PlaySense/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="PlaySense: playtesting toolkit for Unity">
+<meta name="twitter:description" content="PlaySense is a free, open-source Unity package for playtesting. Record where players go, what they look at and what they do, then see heatmaps, replays and reports across all your playtesters.">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "PlaySense", "applicationCategory": "DeveloperApplication", "operatingSystem": "Windows, macOS, Linux (Unity Editor)", "description": "PlaySense is a free, open-source Unity package for playtesting. Record where players go, what they look at and what they do, then see heatmaps, replays and reports across all your playtesters.", "url": "https://prantoverse.github.io/PlaySense/", "codeRepository": "https://github.com/prantoverse/PlaySense", "license": "https://opensource.org/licenses/MIT", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "author": {"@type": "Person", "name": "Pranto", "url": "https://github.com/prantoverse"}}</script>
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); color-scheme: light; }
+body { margin: 0; font-size: 14px; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left-aligned page on a faint level-editor grid; a two-column hero
+   (thesis + install | live replay canvas), then ruled sections, no card wall. */
+:root {
+  --ground: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #142037;
+  --ink-soft: #4a5670;
+  --rule: #d9dfe8;
+  --grid: #e5eaf1;
+  --heat: #ee4a22;
+  --path: #2c64f0;
+  --look: #17945b;
+  --code-bg: #10192c;
+  --code-ink: #dce4f2;
+  --code-dim: #8794ad;
+  --focus: #2c64f0;
+
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --step--1: 0.875rem;
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.6rem;
+  --step-3: clamp(1.9rem, 3.4vw, 2.6rem);
+  --step-4: clamp(2.5rem, 6.4vw, 4.75rem);
+  --measure: 62ch;
+  --wide: 1180px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0e1422; --surface: #151d2e; --ink: #e7ecf5; --ink-soft: #9aa6bd;
+    --rule: #26324a; --grid: #182236; --heat: #ff6a3d; --path: #5b8cff; --look: #35c27f;
+    --code-bg: #0a101c; --code-ink: #dce4f2; --code-dim: #7b88a1; --focus: #8eb0ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #0e1422; --surface: #151d2e; --ink: #e7ecf5; --ink-soft: #9aa6bd;
+  --rule: #26324a; --grid: #182236; --heat: #ff6a3d; --path: #5b8cff; --look: #35c27f;
+  --code-bg: #0a101c; --code-ink: #dce4f2; --code-dim: #7b88a1; --focus: #8eb0ff;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background-color: var(--ground);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+}
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+
+.wrap {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* ---------- top bar ---------- */
+.bar { padding-block: 20px; }
+.bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.mark { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.mark svg { width: 28px; height: 28px; flex: none; }
+.mark span { font-family: var(--display); font-stretch: 125%; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.01em; }
+.bar nav { display: flex; gap: 22px; flex-wrap: wrap; font-size: var(--step--1); }
+.bar nav a { text-decoration: none; color: var(--ink-soft); }
+.bar nav a:hover { color: var(--ink); }
+
+/* ---------- hero ---------- */
+.hero { padding-block: 28px 64px; }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 48px; align-items: center; }
+.hero h1 {
+  font-family: var(--display);
+  font-stretch: 125%;
+  font-weight: 850;
+  font-size: var(--step-4);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  margin: 0 0 22px;
+  text-wrap: balance;
+}
+.lede { font-size: var(--step-1); line-height: 1.55; color: var(--ink-soft); max-width: 46ch; margin: 0 0 28px; }
+.install { display: grid; gap: 10px; max-width: 520px; }
+.install-label { font-size: var(--step--1); color: var(--ink-soft); }
+.copyline {
+  display: flex; align-items: stretch; min-width: 0;
+  background: var(--code-bg); color: var(--code-ink);
+  border-radius: 10px; overflow: hidden;
+}
+.copyline code {
+  flex: 1; min-width: 0; padding: 13px 14px;
+  font-family: var(--mono); font-size: 0.8rem;
+  overflow-x: auto; white-space: nowrap;
+}
+.copyline button {
+  flex: none; border: 0; cursor: pointer;
+  background: var(--heat); color: #fff;
+  font: 600 var(--step--1) var(--body); padding: 0 18px;
+}
+.copyline button:hover { filter: brightness(1.08); }
+.hero-links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; font-size: var(--step--1); }
+.hero-links a { font-weight: 600; }
+
+.replay {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px -30px rgba(20, 32, 55, 0.35);
+}
+.replay-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--rule);
+  font-size: 0.8rem; color: var(--ink-soft);
+}
+.replay-head strong { color: var(--ink); font-weight: 600; }
+.replay-clock { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.replay canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; max-width: 100%; }
+.replay-foot {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  padding: 10px 14px; border-top: 1px solid var(--rule);
+  font-size: 0.78rem; color: var(--ink-soft);
+}
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.key i { width: 18px; height: 8px; border-radius: 2px; display: inline-block; }
+.key .k-heat { background: linear-gradient(90deg, #3d6ff5, #f5d228, var(--heat)); }
+.key .k-path { background: var(--path); height: 3px; }
+.key .k-look { background: var(--look); height: 3px; }
+.key .k-event { background: #f2b705; width: 8px; height: 8px; }
+
+/* ---------- sections ---------- */
+section { padding-block: 64px; border-top: 1px solid var(--rule); background: var(--ground); }
+section h2 {
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 800;
+  font-size: var(--step-3);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0 0 14px;
+  text-wrap: balance;
+  max-width: 22ch;
+}
+.intro { color: var(--ink-soft); max-width: var(--measure); margin: 0 0 36px; font-size: 1.05rem; }
+
+/* records */
+.records { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 2px solid var(--ink); }
+.records > div { padding: 20px 20px 4px 0; min-width: 0; }
+.records > div + div { padding-left: 20px; border-left: 1px solid var(--rule); }
+.records h3 { font-family: var(--display); font-stretch: 100%; font-weight: 700; font-size: var(--step-1); margin: 0 0 8px; }
+.records p { margin: 0 0 10px; color: var(--ink-soft); font-size: 0.95rem; }
+.records .where { font-size: 0.8rem; color: var(--ink-soft); }
+.records code { font-family: var(--mono); font-size: 0.78rem; color: var(--ink); }
+.swatch { display: block; height: 4px; width: 36px; border-radius: 2px; margin-bottom: 14px; }
+
+/* all-sessions example */
+.split { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 48px; align-items: start; }
+.answers { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 20px 22px; }
+.answers-title { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 14px; }
+.row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding-block: 7px; font-size: 0.9rem; }
+.row .lbl { min-width: 0; overflow-wrap: anywhere; }
+.row.sub .lbl { padding-left: 16px; color: var(--ink-soft); font-size: 0.85rem; }
+.track { height: 10px; background: var(--grid); border-radius: 5px; overflow: hidden; }
+.track b { display: block; height: 100%; background: var(--path); border-radius: 5px; }
+.row.sub .track b { background: var(--look); }
+.val { font-variant-numeric: tabular-nums; font-size: 0.82rem; color: var(--ink-soft); white-space: nowrap; }
+.readout { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 0.95rem; }
+.qs { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+.qs li { padding-left: 18px; position: relative; color: var(--ink-soft); }
+.qs li::before { content: ""; position: absolute; left: 0; top: 0.65em; width: 8px; height: 8px; border-radius: 50%; background: var(--heat); }
+.qs strong { color: var(--ink); font-weight: 600; }
+
+/* genres */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+.tabs button {
+  border: 1px solid var(--rule); background: var(--surface); color: var(--ink);
+  font: 500 var(--step--1) var(--body); padding: 8px 14px; border-radius: 999px; cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+.genre { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); gap: 32px; align-items: start; }
+.genre .ask { font-family: var(--display); font-stretch: 100%; font-weight: 600; font-size: var(--step-2); line-height: 1.2; margin: 0 0 10px; text-wrap: balance; }
+.genre p { color: var(--ink-soft); margin: 0; max-width: 40ch; }
+
+pre.code {
+  margin: 0; background: var(--code-bg); color: var(--code-ink);
+  border-radius: 12px; padding: 18px 20px; overflow-x: auto;
+  font-family: var(--mono); font-size: 0.82rem; line-height: 1.65; min-width: 0;
+}
+pre.code .c { color: var(--code-dim); }
+pre.code .s { color: #f4b860; }
+pre.code .k { color: #8eb0ff; }
+
+/* steps (a real sequence) */
+.steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px; counter-reset: step; }
+.steps li { counter-increment: step; min-width: 0; }
+.steps li::before {
+  content: counter(step);
+  display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  border: 2px solid var(--ink); font-family: var(--display); font-weight: 800; margin-bottom: 14px;
+}
+.steps h3 { font-size: 1.05rem; margin: 0 0 6px; font-weight: 600; }
+.steps p { margin: 0; color: var(--ink-soft); font-size: 0.93rem; }
+.steps .path { font-size: 0.82rem; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
+
+/* modules */
+.mod-grid { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 40px; align-items: start; }
+.mod-grid p { color: var(--ink-soft); max-width: 46ch; }
+.hooks { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 18px; }
+.hooks td { padding: 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.hooks td:first-child { font-family: var(--mono); font-size: 0.8rem; padding-right: 14px; white-space: nowrap; }
+.hooks td:last-child { color: var(--ink-soft); }
+
+/* privacy + footer */
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+.facts h3 { font-size: 1.05rem; margin: 0 0 6px; }
+.facts p { margin: 0; color: var(--ink-soft); font-size: 0.95rem; }
+.closing { padding-block: 72px; background: var(--ink); color: var(--ground); border-top: 0; }
+.closing h2 { color: var(--ground); max-width: 18ch; }
+.closing .copyline { max-width: 640px; margin-top: 24px; }
+.closing p { color: var(--ground); opacity: 0.75; margin: 18px 0 0; font-size: var(--step--1); }
+.closing a { color: var(--ground); }
+footer { padding-block: 26px; font-size: 0.82rem; color: var(--ink-soft); background: var(--ground); border-top: 1px solid var(--rule); }
+footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 960px) {
+  .hero .wrap, .split, .genre, .mod-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .records { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .records > div:nth-child(3) { padding-left: 0; border-left: 0; }
+  .records > div:nth-child(n+3) { border-top: 1px solid var(--rule); }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .records { grid-template-columns: minmax(0, 1fr); }
+  .records > div, .records > div + div { padding-left: 0; border-left: 0; }
+  .records > div + div { border-top: 1px solid var(--rule); }
+  .steps, .facts { grid-template-columns: minmax(0, 1fr); }
+  .row { grid-template-columns: minmax(0, 1fr) auto; }
+  .row .track { grid-column: 1 / -1; grid-row: 2; }
+  section { padding-block: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; }
+}
+</style>
+
+</head>
+<body>
+<header class="bar">
+  <div class="wrap">
+    <a class="mark" href="#top" aria-label="PlaySense home">
+      <svg viewBox="0 0 28 28" aria-hidden="true">
+        <rect x="1" y="1" width="26" height="26" rx="7" fill="var(--ink)"></rect>
+        <rect x="6" y="15" width="5" height="5" rx="1" fill="#3d6ff5"></rect>
+        <rect x="11" y="10" width="5" height="5" rx="1" fill="#f5d228"></rect>
+        <rect x="16" y="6" width="6" height="6" rx="1.2" fill="var(--heat)"></rect>
+        <rect x="11" y="15" width="5" height="5" rx="1" fill="#f5d228" opacity="0.6"></rect>
+      </svg>
+      <span>PlaySense</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#records">What it records</a>
+      <a href="#players">All players</a>
+      <a href="#start">Get started</a>
+      <a href="https://github.com/prantoverse/PlaySense">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <h1>Watch how people actually play your game.</h1>
+        <p class="lede">
+          PlaySense is a free Unity package for playtesting. It records where testers go, what they look at and what they do,
+          then shows it as heatmaps, replays and plain-language reports, for one player or all of them.
+        </p>
+        <div class="install">
+          <span class="install-label">Unity Package Manager → Add package from git URL</span>
+          <div class="copyline">
+            <code id="install-url">https://github.com/prantoverse/PlaySense.git?path=/Packages/com.prantoverse.playsense</code>
+            <button type="button" id="copy-install" data-copy="install-url">Copy</button>
+          </div>
+        </div>
+        <div class="hero-links">
+          <a href="https://github.com/prantoverse/PlaySense">Source on GitHub</a>
+          <a href="https://github.com/prantoverse/PlaySense#readme">Documentation</a>
+          <span style="color: var(--ink-soft)">Unity 6 or newer. Free, MIT licensed.</span>
+        </div>
+      </div>
+
+      <figure class="replay" style="margin: 0">
+        <div class="replay-head">
+          <span><strong>Replay</strong>&nbsp;&nbsp;Level 1, playtester 07</span>
+          <span class="replay-clock" id="clock">00:00.0</span>
+        </div>
+        <canvas id="map" width="960" height="600" role="img"
+          aria-label="Top-down view of a game level: a player's path is drawn through the rooms while a heatmap builds up where they spent time, and their view cone highlights the objects they look at."></canvas>
+        <figcaption class="replay-foot">
+          <span class="key"><i class="k-heat"></i>Time spent</span>
+          <span class="key"><i class="k-path"></i>Path</span>
+          <span class="key"><i class="k-look"></i>Looking at</span>
+          <span class="key"><i class="k-event"></i>Event</span>
+          <span id="now" aria-live="polite" style="margin-left: auto"></span>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <section id="records">
+    <div class="wrap">
+      <h2>Four things it records, all on one clock</h2>
+      <p class="intro">
+        Each one is a separate module. Use what you need and delete the rest: its components, dashboard tab and replay layer go with it.
+      </p>
+      <div class="records">
+        <div>
+          <span class="swatch" style="background: var(--path)"></span>
+          <h3>Movement</h3>
+          <p>Paths, speed and idle time for the player, teammates, enemies or a ball. Time-spent heatmaps in the Scene view.</p>
+          <span class="where">Add <code>PlaySenseAgent</code> to anything that moves.</span>
+        </div>
+        <div>
+          <span class="swatch" style="background: var(--look)"></span>
+          <h3>Attention</h3>
+          <p>What the player looked at, for how long, and whether they came back to it. Uses the real camera frustum and line of sight.</p>
+          <span class="where">Mark objects with <code>PlaySenseTarget</code>.</span>
+        </div>
+        <div>
+          <span class="swatch" style="background: #f2b705"></span>
+          <h3>Events</h3>
+          <p>Kills, deaths, pickups, puzzle solves, menu choices: anything you log, with your own key/value details.</p>
+          <span class="where">One line: <code>PlaySenseEvents.Log(…)</code></span>
+        </div>
+        <div>
+          <span class="swatch" style="background: var(--heat)"></span>
+          <h3>Performance</h3>
+          <p>Frame rate, 1% lows and hitches per scene, so you can tell a confusing room from a slow one.</p>
+          <span class="where">Add the Performance module to the manager.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="players">
+    <div class="wrap split">
+      <div>
+        <h2>Answer questions about all your players at once</h2>
+        <p class="intro" style="margin-bottom: 24px">
+          Every playthrough is one session file. The All Sessions view adds them up, so a pile of playtests turns into answers.
+        </p>
+        <ul class="qs">
+          <li><strong>How many players used the ability?</strong> Share of sessions with at least one event.</li>
+          <li><strong>How did they get their kills?</strong> Breakdowns by any detail you logged.</li>
+          <li><strong>How far did they get?</strong> Share of sessions that reached each level.</li>
+          <li><strong>Did anyone notice the clue?</strong> Share of players who looked at each object.</li>
+        </ul>
+      </div>
+      <div class="answers" aria-label="Example All Sessions breakdown from a 20-player shooter playtest">
+        <div class="answers-title"><span>All Sessions › Events</span><span>Example: 20-player shooter playtest</span></div>
+
+        <div class="row"><span class="lbl">Combat / Kill</span><span class="track"><b style="width: 100%"></b></span><span class="val">20/20, 200 kills</span></div>
+        <div class="row sub"><span class="lbl">method = gun</span><span class="track"><b style="width: 70%"></b></span><span class="val">70%</span></div>
+        <div class="row sub"><span class="lbl">method = ability</span><span class="track"><b style="width: 30%"></b></span><span class="val">30%</span></div>
+        <div class="row"><span class="lbl">Combat / AbilityUsed</span><span class="track"><b style="width: 70%"></b></span><span class="val">14/20 players</span></div>
+        <div class="row"><span class="lbl">Scene / Level 2</span><span class="track"><b style="width: 60%"></b></span><span class="val">12/20 reached</span></div>
+
+        <p class="readout">14 of 20 players used an ability, but 70% of kills were still gunfire, and only 12 made it to Level 2.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="genres">
+    <div class="wrap">
+      <h2>Works for whatever you're making</h2>
+      <p class="intro">Nothing is tied to a genre. You decide which moments matter and log them; PlaySense does the counting.</p>
+
+      <div class="tabs" role="tablist" aria-label="Genre examples">
+        <button type="button" role="tab" id="tab-shooter" aria-selected="true" aria-controls="genre-panel" data-genre="shooter">Shooter</button>
+        <button type="button" role="tab" id="tab-sports" aria-selected="false" aria-controls="genre-panel" data-genre="sports">Sports</button>
+        <button type="button" role="tab" id="tab-puzzle" aria-selected="false" aria-controls="genre-panel" data-genre="puzzle">Puzzle</button>
+        <button type="button" role="tab" id="tab-narrative" aria-selected="false" aria-controls="genre-panel" data-genre="narrative">Story & horror</button>
+      </div>
+
+      <div class="genre" id="genre-panel" role="tabpanel" aria-labelledby="tab-shooter">
+        <pre class="code" id="genre-code"></pre>
+        <div>
+          <p class="ask" id="genre-ask"></p>
+          <p id="genre-note"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <h2>Set up in about a minute</h2>
+      <p class="intro">
+        A Welcome window opens the first time you install it. Its checklist does each step for you and ticks it off.
+      </p>
+      <ol class="steps">
+        <li>
+          <h3>Install the package</h3>
+          <p>Paste the git URL into the Package Manager. The Welcome window appears.</p>
+        </li>
+        <li>
+          <h3>Set up the scene</h3>
+          <p>Select your player and run <span class="path">Window › PlaySense › Set Up Scene</span>.</p>
+        </li>
+        <li>
+          <h3>Mark what matters</h3>
+          <p>Tag objects to track attention on, and add <code>PlaySenseEvents.Log</code> where things happen.</p>
+        </li>
+        <li>
+          <h3>Play, then look</h3>
+          <p>Each session saves when you stop. Open the Dashboard or replay it in the Scene view.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="modules">
+    <div class="wrap mod-grid">
+      <div>
+        <h2>Record anything else with your own module</h2>
+        <p>
+          Subclass <code>PlaySenseModule</code>, sample whatever you like, and save it into the session. Add a Dashboard tab or a
+          Replay layer the same way; PlaySense finds them on its own.
+        </p>
+        <table class="hooks">
+          <tbody>
+            <tr><td>OnSessionStart</td><td>Recording starts</td></tr>
+            <tr><td>OnSessionUpdate</td><td>Every frame, on the session clock</td></tr>
+            <tr><td>OnSceneChanged</td><td>The player loads a new level</td></tr>
+            <tr><td>OnSessionStop</td><td>Recording stops: save your data</td></tr>
+          </tbody>
+        </table>
+      </div>
+<pre class="code"><span class="k">public class</span> HealthModule : PlaySenseModule
+{
+    <span class="k">public</span> PlayerHealth player;
+    HealthData data;
+
+    <span class="k">public override void</span> OnSessionStart(PlaySenseSession s)
+        =&gt; data = <span class="k">new</span> HealthData();
+
+    <span class="k">public override void</span> OnSessionUpdate(PlaySenseSession s, <span class="k">float</span> dt)
+    {
+        data.Times.Add(s.Time);
+        data.Health.Add(player.Current);
+    }
+
+    <span class="k">public override void</span> OnSessionStop(PlaySenseSession s)
+        =&gt; s.SetModuleData(ModuleId, data);
+}</pre>
+    </div>
+  </section>
+
+  <section id="data">
+    <div class="wrap">
+      <h2>Your playtest data stays with you</h2>
+      <div class="facts" style="margin-top: 28px">
+        <div>
+          <h3>No servers, no accounts</h3>
+          <p>Sessions are plain JSON files on your disk. Nothing is sent anywhere unless you choose to upload it.</p>
+        </div>
+        <div>
+          <h3>Safe to ship</h3>
+          <p><code>PlaySenseEvents.Log</code> does nothing when PlaySense isn't recording, so the calls can stay in your build.</p>
+        </div>
+        <div>
+          <h3>Free and open source</h3>
+          <p>MIT licensed. Read it, change it, use it in commercial games.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing">
+    <div class="wrap">
+      <h2>Run your next playtest with PlaySense.</h2>
+      <div class="copyline">
+        <code id="install-url-2">https://github.com/prantoverse/PlaySense.git?path=/Packages/com.prantoverse.playsense</code>
+        <button type="button" data-copy="install-url-2">Copy</button>
+      </div>
+      <p>Requires Unity 6. Source, issues and docs on <a href="https://github.com/prantoverse/PlaySense">GitHub</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>PlaySense is made by <a href="https://github.com/prantoverse">Pranto</a>.</span>
+    <span>MIT licence</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- copy buttons ----------
+  document.querySelectorAll("[data-copy]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var source = document.getElementById(button.getAttribute("data-copy"));
+      var text = source.textContent.trim();
+      var done = function () {
+        button.textContent = "Copied";
+        setTimeout(function () { button.textContent = "Copy"; }, 1600);
+      };
+      var fallback = function () {
+        var range = document.createRange();
+        range.selectNodeContents(source);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        button.textContent = "Press Ctrl+C";
+        setTimeout(function () { button.textContent = "Copy"; }, 2200);
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, fallback);
+        } else {
+          fallback();
+        }
+      } catch (e) {
+        fallback();
+      }
+    });
+  });
+
+  // ---------- genre tabs ----------
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function hl(code) {
+    // strings first: the comment pass only touches lines starting with //
+    return esc(code)
+      .replace(/"([^"\n]*)"/g, '<span class="s">"$1"</span>')
+      .replace(/^(\s*\/\/[^\n]*)$/gm, '<span class="c">$1</span>');
+  }
+  var genres = {
+    shooter: {
+      code: '// When an enemy dies\nPlaySenseEvents.Log("Combat", "Kill", enemy,\n    "method", usedAbility ? "ability" : "gun",\n    "weapon", weapon.Name);\n\n// When the player dies\nPlaySenseEvents.Log("Combat", "Died", gameObject,\n    "cause", cause, "checkpoint", checkpointId);',
+      ask: "Are players using the abilities you built, or just shooting?",
+      note: "The All Sessions view splits kills by method and weapon, and Replay shows where every death happened across all testers."
+    },
+    sports: {
+      code: '// Football\nPlaySenseEvents.Log("Shot", "Taken", striker,\n    "outcome", "saved", "foot", "weak", "zone", "box");\n\n// Cricket\nPlaySenseEvents.Log("Batting", "Shot", batter,\n    "type", "pull", "runs", "4", "delivery", "bouncer");\n\n// Tennis\nPlaySenseEvents.Log("Point", "Won", player,\n    "how", "unforced_error", "rally", "7");',
+      ask: "Which skills do players never touch?",
+      note: "Add an agent to each player and the ball for positioning heatmaps, then break down shots, deliveries or points by any detail."
+    },
+    puzzle: {
+      code: '// When a puzzle is solved\nPlaySenseEvents.Log("Puzzle", "Solved", puzzle.Id,\n    "hintsUsed", hints.ToString(),\n    "attempts", attempts.ToString());\n\n// When the player opens the hint menu\nPlaySenseEvents.Log("Puzzle", "HintOpened", puzzle.Id);',
+      ask: "Which puzzle makes people reach for hints?",
+      note: "Attention shows whether players even looked at the lever before giving up; the heatmap shows where they paced around."
+    },
+    narrative: {
+      code: '// At a dialogue choice\nPlaySenseEvents.Log("Story", "Choice", "Ferry Captain",\n    "option", "lie", "chapter", "2");\n\n// When a clue is picked up\nPlaySenseEvents.Log("Clue", "Found", clue.gameObject);',
+      ask: "Did anyone notice the clue on the desk?",
+      note: "Mark clues as attention targets to see the share of players who looked at each one, and for how long, without any extra code."
+    }
+  };
+  var tabs = document.querySelectorAll('[role="tab"]');
+  var panel = document.getElementById("genre-panel");
+  function showGenre(key) {
+    var g = genres[key];
+    document.getElementById("genre-code").innerHTML = hl(g.code);
+    document.getElementById("genre-ask").textContent = g.ask;
+    document.getElementById("genre-note").textContent = g.note;
+    tabs.forEach(function (t) {
+      var on = t.getAttribute("data-genre") === key;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+      if (on) panel.setAttribute("aria-labelledby", t.id);
+    });
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener("click", function () { showGenre(t.getAttribute("data-genre")); });
+    t.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      var next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+      next.focus();
+      showGenre(next.getAttribute("data-genre"));
+    });
+  });
+  showGenre("shooter");
+
+  // ---------- hero replay ----------
+  var canvas = document.getElementById("map");
+  var ctx = canvas.getContext("2d");
+  var W = 960, H = 600, CELL = 24;
+  var clockEl = document.getElementById("clock");
+  var nowEl = document.getElementById("now");
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var colors = {};
+  function readColors() {
+    var cs = getComputedStyle(document.documentElement);
+    ["surface", "ink", "ink-soft", "rule", "grid", "heat", "path", "look"].forEach(function (k) {
+      colors[k] = cs.getPropertyValue("--" + k).trim();
+    });
+  }
+  readColors();
+  try {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () { readColors(); draw(); });
+    new MutationObserver(function () { readColors(); draw(); })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  } catch (e) { /* older browsers: colours stay as loaded */ }
+
+  // Level: walls as rectangles (x, y, w, h).
+  var walls = [
+    [40, 40, 880, 14], [40, 546, 880, 14], [40, 40, 14, 520], [906, 40, 14, 520],
+    [330, 54, 14, 190], [330, 330, 14, 216],
+    [600, 54, 14, 150], [600, 290, 14, 256],
+    [54, 300, 190, 14], [614, 380, 150, 14], [830, 380, 76, 14]
+  ];
+  var targets = [
+    { name: "Locked door", x: 337, y: 287, r: 16 },
+    { name: "Clue on desk", x: 160, y: 140, r: 14 },
+    { name: "Ammo crate", x: 470, y: 470, r: 14 },
+    { name: "Terminal", x: 780, y: 140, r: 15 },
+    { name: "Exit", x: 860, y: 480, r: 16 }
+  ];
+  // Route through the level; "wait" = seconds spent looking around there.
+  var route = [
+    { x: 120, y: 470, wait: 0.6 }, { x: 150, y: 380, wait: 0 }, { x: 160, y: 200, wait: 2.2, look: 1 },
+    { x: 260, y: 230, wait: 0 }, { x: 290, y: 287, wait: 1.6, look: 0 }, { x: 420, y: 287, wait: 0 },
+    { x: 470, y: 420, wait: 1.4, look: 2, event: "Picked up the ammo crate" }, { x: 520, y: 250, wait: 0 },
+    { x: 650, y: 245, wait: 0 }, { x: 760, y: 190, wait: 2.6, look: 3, event: "Solved the terminal puzzle (1 hint)" },
+    { x: 700, y: 330, wait: 0 }, { x: 790, y: 450, wait: 0.8, event: "Kill, method = gun" },
+    { x: 860, y: 470, wait: 1.0, look: 4, event: "Entered Level 2" }
+  ];
+  var SPEED = 150; // px per second
+
+  // Pre-build a timeline of samples (t, x, y, heading, look target, event).
+  var samples = [];
+  (function build() {
+    var t = 0, dt = 1 / 30, heading = -Math.PI / 2;
+    for (var i = 0; i < route.length; i++) {
+      var p = route[i];
+      if (i > 0) {
+        var a = route[i - 1];
+        var dist = Math.hypot(p.x - a.x, p.y - a.y);
+        var steps = Math.max(1, Math.round(dist / SPEED / dt));
+        var targetHeading = Math.atan2(p.y - a.y, p.x - a.x);
+        for (var s = 1; s <= steps; s++) {
+          var f = s / steps;
+          var ease = f * f * (3 - 2 * f);
+          heading = turn(heading, targetHeading, 0.18);
+          samples.push({ t: t += dt, x: a.x + (p.x - a.x) * ease, y: a.y + (p.y - a.y) * ease, h: heading, look: -1 });
+        }
+      }
+      if (p.wait > 0) {
+        var n = Math.round(p.wait / dt);
+        var lookAt = p.look != null ? targets[p.look] : null;
+        for (var k = 0; k < n; k++) {
+          var want = lookAt ? Math.atan2(lookAt.y - p.y, lookAt.x - p.x) + Math.sin(k / 9) * 0.12 : heading + Math.sin(k / 7) * 0.05;
+          heading = turn(heading, want, 0.12);
+          samples.push({ t: t += dt, x: p.x + Math.sin(k / 5) * 2, y: p.y + Math.cos(k / 6) * 2, h: heading, look: p.look != null ? p.look : -1,
+            event: k === Math.floor(n / 2) ? p.event : null });
+        }
+      }
+    }
+  })();
+  function turn(from, to, rate) {
+    var d = Math.atan2(Math.sin(to - from), Math.cos(to - from));
+    return from + d * rate;
+  }
+  var DURATION = samples[samples.length - 1].t;
+  var LOOP_PAUSE = 2.5;
+
+  // Heat grid: seconds spent per cell up to time t.
+  var cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL);
+  function heatUntil(index) {
+    var heat = new Float32Array(cols * rows), max = 0;
+    for (var i = 0; i <= index; i++) {
+      var s = samples[i];
+      // spread a little into neighbours so it reads as a heatmap, not dots
+      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+        var c = Math.floor(s.x / CELL) + dx, r = Math.floor(s.y / CELL) + dy;
+        if (c < 0 || r < 0 || c >= cols || r >= rows) continue;
+        var w = (dx === 0 && dy === 0) ? 1 : 0.35;
+        var v = heat[r * cols + c] += w / 30;
+        if (v > max) max = v;
+      }
+    }
+    return { heat: heat, max: max };
+  }
+  function heatColor(f, alpha) {
+    // blue -> yellow -> heat
+    var a = [61, 111, 245], b = [245, 210, 40], c = hexRgb(colors.heat || "#ee4a22");
+    var from = f < 0.5 ? a : b, to = f < 0.5 ? b : c, k = f < 0.5 ? f * 2 : (f - 0.5) * 2;
+    return "rgba(" + Math.round(from[0] + (to[0] - from[0]) * k) + "," + Math.round(from[1] + (to[1] - from[1]) * k) + "," +
+      Math.round(from[2] + (to[2] - from[2]) * k) + "," + alpha + ")";
+  }
+  function hexRgb(hex) {
+    var h = hex.replace("#", "");
+    if (h.length === 3) h = h.split("").map(function (x) { return x + x; }).join("");
+    return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)];
+  }
+
+  var index = Math.floor(samples.length * 0.42); // start mid-session so the first frame already shows a story
+  var cachedHeat = null, cachedIndex = -1;
+  var events = [];
+
+  function draw() {
+    var s = samples[Math.min(index, samples.length - 1)];
+    if (cachedIndex !== index) { cachedHeat = heatUntil(index); cachedIndex = index; }
+
+    ctx.fillStyle = colors.surface;
+    ctx.fillRect(0, 0, W, H);
+
+    // floor grid
+    ctx.strokeStyle = colors.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var x = 54; x < 906; x += CELL) { ctx.moveTo(x + 0.5, 54); ctx.lineTo(x + 0.5, 546); }
+    for (var y = 54; y < 546; y += CELL) { ctx.moveTo(54, y + 0.5); ctx.lineTo(906, y + 0.5); }
+    ctx.stroke();
+
+    // heatmap
+    var hm = cachedHeat, max = Math.max(hm.max, 0.6);
+    for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+      var v = hm.heat[r * cols + c];
+      if (v <= 0.01) continue;
+      var f = Math.sqrt(Math.min(1, v / max));
+      ctx.fillStyle = heatColor(f, 0.18 + f * 0.5);
+      ctx.fillRect(c * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2);
+    }
+
+    // walls
+    ctx.fillStyle = colors.ink;
+    walls.forEach(function (w) { ctx.fillRect(w[0], w[1], w[2], w[3]); });
+
+    // targets
+    targets.forEach(function (t, i) {
+      var active = s.look === i;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
+      ctx.fillStyle = colors.surface;
+      ctx.fill();
+      ctx.lineWidth = active ? 4 : 2;
+      ctx.strokeStyle = active ? colors.look : colors["ink-soft"];
+      ctx.stroke();
+      ctx.font = (active ? "600 " : "500 ") + "21px 'IBM Plex Sans', system-ui, sans-serif";
+      ctx.fillStyle = active ? colors.look : colors["ink-soft"];
+      ctx.textAlign = t.x > 700 ? "right" : "left";
+      ctx.fillText(t.name, t.x + (t.x > 700 ? -t.r - 8 : t.r + 8), t.y - t.r - 4);
+    });
+
+    // path so far
+    ctx.strokeStyle = colors.path;
+    ctx.lineWidth = 4;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    for (var i = 0; i <= index; i += 2) {
+      var p = samples[i];
+      if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    ctx.lineTo(s.x, s.y);
+    ctx.stroke();
+
+    // event markers already passed
+    events.forEach(function (e) {
+      ctx.fillStyle = "#f2b705";
+      ctx.fillRect(e.x - 7, e.y - 7, 14, 14);
+      ctx.strokeStyle = colors.ink;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(e.x - 7, e.y - 7, 14, 14);
+    });
+
+    // view cone (attention angle 15 deg either side)
+    var len = 170, half = 15 * Math.PI / 180;
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.arc(s.x, s.y, len, s.h - half, s.h + half);
+    ctx.closePath();
+    ctx.fillStyle = s.look >= 0 ? hexToAlpha(colors.look, 0.2) : hexToAlpha(colors.path, 0.12);
+    ctx.fill();
+    if (s.look >= 0) {
+      var t = targets[s.look];
+      ctx.setLineDash([6, 6]);
+      ctx.strokeStyle = colors.look;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // player
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 11, 0, Math.PI * 2);
+    ctx.fillStyle = colors.path;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = colors.surface;
+    ctx.stroke();
+
+    // clock + status line
+    var m = Math.floor(s.t / 60), sec = s.t - m * 60;
+    clockEl.textContent = String(m).padStart(2, "0") + ":" + sec.toFixed(1).padStart(4, "0");
+    var status = s.look >= 0 ? "Looking at " + targets[s.look].name : "Exploring";
+    if (events.length && s.t - events[events.length - 1].t < 2.2) status = events[events.length - 1].label;
+    nowEl.textContent = status;
+  }
+  function hexToAlpha(hex, a) {
+    var c = hexRgb(hex);
+    return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")";
+  }
+
+  function rebuildEvents() {
+    events = [];
+    for (var i = 0; i <= index; i++) {
+      if (samples[i].event) events.push({ x: samples[i].x, y: samples[i].y, t: samples[i].t, label: samples[i].event });
+    }
+  }
+
+  rebuildEvents();
+  draw();
+
+  if (!reduce) {
+    var last = null, pause = 0;
+    var visible = true;
+    try {
+      new IntersectionObserver(function (entries) { visible = entries[0].isIntersecting; }).observe(canvas);
+    } catch (e) { /* keep animating */ }
+
+    var frame = function (now) {
+      requestAnimationFrame(frame);
+      if (last === null) { last = now; return; }
+      var dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      if (!visible || document.hidden) return;
+
+      if (index >= samples.length - 1) {
+        pause += dt;
+        if (pause > LOOP_PAUSE) { pause = 0; index = 0; events = []; }
+        else return;
+      }
+
+      var target = samples[index].t + dt;
+      while (index < samples.length - 1 && samples[index + 1].t <= target) {
+        index++;
+        if (samples[index].event) events.push({ x: samples[index].x, y: samples[index].y, t: samples[index].t, label: samples[index].event });
+      }
+      draw();
+    };
+    requestAnimationFrame(frame);
+  }
+})();
+</script>
+
+</body>
+</html>
