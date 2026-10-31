@@ -1,0 +1,14 @@
+{
+    "name": "PlaySense.Performance",
+    "rootNamespace": "PlaySense.Performance",
+    "references": ["PlaySense.Core"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

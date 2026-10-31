@@ -1,10 +1,11 @@
 using PlaySense;
-using PlaySense.Perception;
+using PlaySense.Attention;
 using UnityEngine;
 
 /// <summary>
-/// Demo only: press E while looking at something to "inspect" it.
-/// Shows how a game logs events with PlaySenseEvents.Log.
+/// Demo only: press E (or click) while looking at something to "inspect" it.
+/// Shows how a game logs events with PlaySenseEvents.Log, including metadata
+/// that becomes a breakdown in the Dashboard's All Sessions view.
 /// </summary>
 public class DemoInteraction : MonoBehaviour
 {
@@ -13,24 +14,29 @@ public class DemoInteraction : MonoBehaviour
 
     private void Update()
     {
-        if (!Input.GetKeyDown(KeyCode.E))
+        bool key = Input.GetKeyDown(KeyCode.E);
+        bool click = Input.GetMouseButtonDown(1);
+        if (!key && !click)
             return;
 
         Camera view = Camera.main;
         if (view == null)
             return;
 
+        string input = key ? "keyboard" : "mouse";
+
         RaycastHit hit;
         if (Physics.Raycast(view.transform.position, view.transform.forward, out hit, reach))
         {
             PlaySenseTarget target = hit.collider.GetComponentInParent<PlaySenseTarget>();
-            string targetName = target != null ? target.DisplayName : hit.collider.name;
+            string category = target != null && !string.IsNullOrEmpty(target.Category) ? target.Category : "Other";
 
-            PlaySenseEvents.Log("Interaction", "Inspect", targetName, hit.point);
+            GameObject inspected = target != null ? target.gameObject : hit.collider.gameObject;
+            PlaySenseEvents.Log("Interaction", "Inspect", inspected, "input", input, "kind", category);
         }
         else
         {
-            PlaySenseEvents.Log("Interaction", "InspectNothing", null, transform.position);
+            PlaySenseEvents.LogWithData("Interaction", "InspectNothing", null, "input", input);
         }
     }
 }

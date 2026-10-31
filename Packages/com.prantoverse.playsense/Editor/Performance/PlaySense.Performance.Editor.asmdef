@@ -1,0 +1,14 @@
+{
+    "name": "PlaySense.Performance.Editor",
+    "rootNamespace": "PlaySense.EditorTools",
+    "references": ["PlaySense.Core","PlaySense.Performance","PlaySense.Editor"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

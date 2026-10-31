@@ -11,12 +11,13 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 119be7b2e049b6e42822ecd33ba3f602, type: 3}
   m_Name: PlaySenseSettings
-  m_EditorClassIdentifier: PlaySense.Runtime::PlaySense.Settings.PlaySenseSettings
+  m_EditorClassIdentifier: PlaySense.Core::PlaySense.Settings.PlaySenseSettings
   samplingRate: 20
   maxRecordingMinutes: 30
   maxClockStep: 0.25
   autoSave: 1
   recordInBuilds: 1
+  keepSessionAcrossScenes: 1
   perceptionRate: 10
   detectionRadius: 25
   attentionAngle: 15

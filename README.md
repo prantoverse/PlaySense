@@ -1,14 +1,15 @@
 # PlaySense
 
-A lightweight playtesting toolkit for Unity. PlaySense records where players go, what they look at and what they do, then gives you:
+A modular playtesting toolkit for Unity. PlaySense records where players go, what they look at and what they do, then shows you:
 
-- a **Dashboard** with session metrics, a speed chart, plain-language findings and the most-looked-at objects
-- a **Scene-view Replay** with the player's path, a time-spent heatmap, attention markers and events on a timeline
-- a **PDF report** you can hand to a designer
+- a **Dashboard** for each session, plus an **All Sessions** view that answers "how many players did X?"
+- a **Scene-view Replay** with paths, a time-spent heatmap, attention and events, for one session or every session overlaid
+- a **PDF report** for one session
+- a **Welcome window** with a live setup checklist, which opens the first time the package is loaded
 
 No servers or SDK keys. Sessions are plain JSON files (`.pss`) on disk.
 
-> Requires Unity 6 (6000.0+). Uses built-in physics for visibility checks.
+> Requires Unity 6 (6000.0+).
 
 ---
 
@@ -20,87 +21,155 @@ No servers or SDK keys. Sessions are plain JSON files (`.pss`) on disk.
 https://github.com/prantoverse/playsense.git?path=/Packages/com.prantoverse.playsense
 ```
 
-Or clone this repo and open it as a project. The `Assets/Demo/Demo.unity` scene is ready to play.
+The **Welcome to PlaySense** window opens on its own. Its checklist does each setup step for you and ticks it off. You can reopen it any time from **Window → PlaySense → Welcome & Setup Guide**.
 
-## Set up a scene (1 minute)
+Or clone this repo and open it as a project; `Assets/Demo/Demo.unity` is ready to play.
 
-1. Select your **player** object.
-2. Run **Window → PlaySense → Set Up Scene**. This adds:
-   - a `PlaySenseManager` to the scene
-   - `PlaySenseAgent` + `PlaySensePerception` to your player
-   - `PlaySenseView` to your gameplay camera
-   - a settings asset at `Assets/Resources/PlaySenseSettings.asset`
-3. Select the objects you want attention data on (doors, clues, enemies, signs) and run **GameObject → PlaySense → Mark as Attention Target**. Each needs a collider.
-4. Press **Play**, play for a bit, exit Play mode. The session is saved automatically.
+## Quick start
+
+1. Select your **player** and run **Window → PlaySense → Set Up Scene**. This adds the manager, marks the player, and adds attention tracking and a camera view.
+2. Select the objects you want attention data on and run **GameObject → PlaySense → Mark as Attention Target**.
+3. Add `PlaySenseEvents.Log(...)` calls wherever something interesting happens (see below).
+4. Press **Play**, play, exit Play mode. The session saves automatically.
 5. Open **Window → PlaySense → Dashboard**.
 
-## Log gameplay events
-
-Call this from anywhere. It's a no-op when nothing is recording, so it's safe to leave in shipping code.
+## Track what players do
 
 ```csharp
 using PlaySense;
 
 PlaySenseEvents.Log("Puzzle", "Solved", "Lever Door");
-PlaySenseEvents.Log("Combat", "Died", "Spike Trap", transform.position);
-PlaySenseEvents.Log("Shop", "Bought", gameObject, "item", "Lantern", "price", "40");
+PlaySenseEvents.Log("Combat", "AbilityUsed", "Shockwave", transform.position);
+PlaySenseEvents.Log("Combat", "Kill", enemy, "method", "gun", "weapon", "AR");
 ```
 
-Events show up in the Dashboard, the PDF and as markers in the Replay.
+`Log` does nothing when PlaySense isn't recording, so the calls can stay in shipping code. The key/value pairs after the target become **breakdowns** in the All Sessions view.
 
-## Components
+### Example: "how many players used abilities vs. raw gunfights?"
 
-| Component | Put it on | What it does |
-|---|---|---|
-| `PlaySenseManager` | Any object (one per scene) | Owns the session clock, samples agents, saves the session when the scene unloads or the app quits. `StartRecording()` / `StopRecording()` for manual control. |
-| `PlaySenseAgent` | The player | Records position and view direction. Set **Agent Id** if you record more than one agent. |
-| `PlaySensePerception` | The player (next to the agent) | Detects which targets are visible (in frustum, not occluded) and which one the player is focusing on. |
-| `PlaySenseView` | Gameplay camera | The point of view used for visibility. Works without a Camera using fallback FOV. |
-| `PlaySenseTarget` | Objects you care about | Marks an object for attention tracking. Optional display name, category (shown in reports) and aim point. |
+Log every kill with how it happened:
+
+```csharp
+PlaySenseEvents.Log("Combat", "Kill", enemy, "method", usedAbility ? "ability" : "gun");
+PlaySenseEvents.Log("Combat", "AbilityUsed", abilityName, transform.position);
+```
+
+After a playtest, open **Dashboard → All Sessions → Events**:
+
+```
+Combat / Kill          20/20 (100%)   200x, 10/session
+   method
+      gun              70% of events, 20 session(s)
+      ability          30% of events, 20 session(s)
+Combat / AbilityUsed   14/20 (70%)    14x, 0.7/session
+```
+
+That reads as *14 of 20 players used an ability; 70% of all kills were gunfire.* **Export CSV** puts the same table in a spreadsheet. The **Replay → All Sessions** mode shows *where* abilities were used across everyone.
+
+"% of sessions" means "% of players" when each tester plays once. Filter by scene to compare levels; the Summary tab shows how far players got (the share of sessions that reached each scene).
+
+## Modules
+
+Each module records one kind of data. Remove a module's folders and its components, Dashboard tab, Replay layer and checklist steps go with it.
+
+| Module | Component | Goes on | Records |
+|---|---|---|---|
+| **Core** (required) | `PlaySenseManager`, `PlaySenseAgent` | manager / player | Session clock, scenes, gameplay events |
+| **Movement** | `PlaySenseMovementModule` | manager (added automatically) | Player paths, speed, idle time, heatmap |
+| **Attention** | `PlaySensePerception` + `PlaySenseView` + `PlaySenseTarget` | player / camera / objects | What players look at and for how long |
+| **Performance** | `PlaySensePerformanceModule` | manager | FPS, 1% lows, hitches, per scene |
+
+Editor features are modules too: **Replay**, **Reports** (PDF), and each module's Dashboard tab.
+
+### Assemblies
+
+```
+PlaySense.Core                 runtime: manager, session, movement, events, storage, analysis
+PlaySense.Attention            runtime: perception, views, targets            → Core
+PlaySense.Performance          runtime: frame rate                            → Core
+PlaySense.Editor               dashboard, overview, welcome, setup, extension points → Core
+PlaySense.Attention.Editor     attention tab, replay layer, setup steps
+PlaySense.Performance.Editor   performance tab
+PlaySense.Replay.Editor        Replay window + path/heatmap/events layers
+PlaySense.Reports.Editor       PDF export
+```
+
+Core never references a module, so you can delete any module folder and the rest still compiles.
+
+## Write your own module
+
+Subclass `PlaySenseModule`, put it on the manager (or player), and store any `[Serializable]` class in the session:
+
+```csharp
+using System;
+using System.Collections.Generic;
+using PlaySense.Core;
+
+[Serializable]
+public class HealthData
+{
+    public List<float> Times = new List<float>();
+    public List<float> Health = new List<float>();
+}
+
+[PlaySenseModuleInfo("Health", "Player health over time.")]
+public class HealthModule : PlaySenseModule
+{
+    public PlayerHealth player;
+    private HealthData _data;
+    private float _timer;
+
+    public override void OnSessionStart(PlaySenseSession session) => _data = new HealthData();
+
+    public override void OnSessionUpdate(PlaySenseSession session, float deltaTime)
+    {
+        if ((_timer += deltaTime) < 1f) return;
+        _timer = 0f;
+        _data.Times.Add(session.Time);
+        _data.Health.Add(player.Current);
+    }
+
+    public override void OnSessionStop(PlaySenseSession session) => session.SetModuleData(ModuleId, _data);
+}
+```
+
+Read it back with `session.GetModuleData<HealthData>("HealthModule")`. To give it a Dashboard tab, subclass `PlaySenseDashboardTab` in an Editor assembly. PlaySense finds tabs, Replay layers (`PlaySenseReplayLayer`), Dashboard buttons (`PlaySenseSessionAction`) and checklist items (`PlaySenseSetupStep`) automatically. `PlaySensePerformanceModule` and its editor are a complete working example.
+
+Module callbacks:
+
+| Callback | When |
+|---|---|
+| `OnSessionStart` | Recording starts, or the module is enabled mid-session |
+| `OnSessionUpdate` | Every frame, after the session clock advances |
+| `OnSceneChanged` | The active scene changes (sessions span scene loads) |
+| `OnSessionStop` | Recording stops, or the module is disabled mid-session |
+
+## Sessions across scenes
+
+With **Keep Session Across Scenes** on (the default), the manager survives scene loads, so one playthrough is one session. Managers placed in later levels step aside automatically. Every frame, event and attention record stores which scene it happened in; the Dashboard can filter by scene, and Replay only draws data from the scene you have open. Turn the option off to record each scene as its own session.
 
 ## How attention works
 
-Ten times a second (configurable), perception finds `PlaySenseTarget`s within the detection radius and keeps the ones a view can actually see: inside the camera frustum, with nothing blocking the line from the camera to the target's centre. The player's own colliders are ignored, so third-person cameras work.
-
-A target is **attended** when it stays within the attention angle (15° by default) of the view centre for at least the minimum attention time (0.5 s). Short interruptions under the grace time (0.25 s) don't break attention. Focus only switches to another target when it is clearly more central. Each completed attention period becomes one observation, flagged as a **reinspection** if the player had already looked at that target.
-
-Want attention on everything without tagging? Set **Target Mode** on `PlaySensePerception` to *Any Collider*. It's handy for a first look but noisy (floors and walls count).
+Several times a second, perception finds `PlaySenseTarget`s near the player and keeps the ones the camera can see: inside the frustum, with nothing in between (the player's own colliders are ignored, so third-person works). A target is **attended** when it stays within the attention angle (15° by default) of the view centre for the minimum attention time (0.5 s). Brief interruptions under the grace time don't break it, and focus only switches when another target is clearly more central. Repeat looks are flagged as **reinspections**.
 
 ## Settings
 
-All thresholds live in one asset (**Window → PlaySense → Select Settings**), so the runtime, Dashboard and PDF always agree:
-
-- **Recording:** sampling rate, max length, clock clamp (stops loading hitches from inflating session time), auto-save, record in builds
-- **Perception:** scan rate, detection radius, attention angle, minimum attention, grace time, switch margin, score weights
-- **Analysis:** brief/sustained attention thresholds, idle speed, teleport speed cutoff
-- **Replay:** default playback speed, heatmap cell size
-- **Diagnostics:** verbose logging (off by default)
+All thresholds live in one asset (**Window → PlaySense → Select Settings**): sampling and perception rates, max session length, clock clamp, scene persistence, attention angle/timing, analysis cut-offs, replay defaults and verbose logging.
 
 ## Where sessions are saved
 
 - **Editor:** `<project>/PlaySenseSessions/`
 - **Builds:** `Application.persistentDataPath/PlaySenseSessions/`
 
-To analyse sessions from a build, copy the `.pss` files into the project's `PlaySenseSessions` folder and hit **Refresh** in the Dashboard. `PlaySenseManager.SessionSaved` fires after every save if you want to upload files yourself.
-
-## Replay
-
-**Window → PlaySense → Replay**, or **Replay** next to a session in the Dashboard.
-
-- Scrub or play the timeline at 0.1–10× speed
-- Toggle path, heatmap, attention, events and view cone
-- Click any moment in the list to jump to it
-- **Frame** zooms the Scene view to the play area; **Follow player** tracks the player while playing
-
-Open the scene the session was recorded in so the replay lines up. The window offers a button for it.
+To analyse a build playtest, collect testers' `.pss` files into the project's `PlaySenseSessions` folder and hit **Refresh**. `PlaySenseManager.SessionSaved` fires after every save if you want to upload them yourself.
 
 ## Project layout
 
 ```
-Packages/com.prantoverse.playsense/   the package (what users install)
-  Runtime/                            components, recording, storage, analysis
-  Editor/                             Dashboard, Replay, PDF export, setup menu
-Assets/Demo/                          demo scene and scripts (not part of the package)
+Packages/com.prantoverse.playsense/
+  Runtime/Core | Attention | Performance
+  Editor/Core | Attention | Performance | Replay | Reports
+Assets/Demo/                demo scene and scripts (not part of the package)
 ```
 
 ## License

@@ -438,7 +438,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7f6dc76115007494c8bbbdb520b0815a, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: PlaySense.Runtime::PlaySense.Core.PlaySenseAgent
+  m_EditorClassIdentifier: PlaySense.Core::PlaySense.Core.PlaySenseAgent
   agentId: Player
   viewCamera: {fileID: 1306353025}
 --- !u!114 &747442599
@@ -452,7 +452,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6f2bab53957884044ae2ad0e9c565cf5, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: PlaySense.Runtime::PlaySense.Perception.PlaySensePerception
+  m_EditorClassIdentifier: PlaySense.Attention::PlaySense.Attention.PlaySensePerception
   targetMode: 0
   detectionLayers:
     serializedVersion: 2
@@ -3146,7 +3146,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ad49a57ed5bc28941a0857f18bcc6d16, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: PlaySense.Runtime::PlaySense.Perception.PlaySenseView
+  m_EditorClassIdentifier: PlaySense.Attention::PlaySense.Attention.PlaySenseView
   activeView: 1
   viewType: 2
   fallbackFieldOfView: 90
@@ -3289,6 +3289,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1593450089}
   - component: {fileID: 1593450090}
+  - component: {fileID: 1593450091}
+  - component: {fileID: 1593450092}
   m_Layer: 0
   m_Name: PlaySenseManager
   m_TagString: Untagged
@@ -3322,9 +3324,10 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3afb85755fcf1014f90770facb1951e0, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: PlaySense.Runtime::PlaySense.Core.PlaySenseManager
+  m_EditorClassIdentifier: PlaySense.Core::PlaySense.Core.PlaySenseManager
   settings: {fileID: 11400000, guid: 1e529b35128497c4f86e5474b42bea5c, type: 2}
   recordOnStart: 1
+  autoAddMovementModule: 1
 --- !u!1 &1954867365
 GameObject:
   m_ObjectHideFlags: 0
@@ -4529,7 +4532,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 40cb59ee333846a7aa725d1c4dbab4f6, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: PlaySense.Runtime::PlaySense.Perception.PlaySenseTarget
+  m_EditorClassIdentifier: PlaySense.Attention::PlaySense.Attention.PlaySenseTarget
   displayName: 
   category: Door
   aimPoint: {fileID: 0}
@@ -4544,7 +4547,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 40cb59ee333846a7aa725d1c4dbab4f6, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: PlaySense.Runtime::PlaySense.Perception.PlaySenseTarget
+  m_EditorClassIdentifier: PlaySense.Attention::PlaySense.Attention.PlaySenseTarget
   displayName: 
   category: Container
   aimPoint: {fileID: 0}
@@ -4559,10 +4562,36 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 40cb59ee333846a7aa725d1c4dbab4f6, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: PlaySense.Runtime::PlaySense.Perception.PlaySenseTarget
+  m_EditorClassIdentifier: PlaySense.Attention::PlaySense.Attention.PlaySenseTarget
   displayName: 
   category: Furniture
   aimPoint: {fileID: 0}
+--- !u!114 &1593450091
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1593450088}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a2e16b10d9843519237f17582b830e8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: PlaySense.Core::PlaySense.Core.PlaySenseMovementModule
+--- !u!114 &1593450092
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1593450088}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d3221d9e48d4cddbca2ff8b1ab78cef, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: PlaySense.Performance::PlaySense.Performance.PlaySensePerformanceModule
+  sampleInterval: 0.5
+  hitchThresholdMs: 100
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.0] - 2026-10-31
+
+### Added
+- **Modules.** `PlaySenseModule` base class with session start/update/scene-change/stop callbacks and per-module data storage in the session (`SetModuleData` / `GetModuleData<T>`).
+- **Separate assemblies per feature:** `PlaySense.Core`, `PlaySense.Attention`, `PlaySense.Performance`, plus editor assemblies for Core, Attention, Performance, Replay and Reports. Core references no module.
+- **Editor extension points**, discovered automatically: `PlaySenseDashboardTab`, `PlaySenseReplayLayer`, `PlaySenseSessionAction`, `PlaySenseSetupStep`.
+- **All Sessions view** in the Dashboard: % of sessions with each event, totals and per-session averages, metadata breakdowns (e.g. 70% of kills by gun), scene reach, attention across players, CSV export, scene filter.
+- **Replay "All Sessions" mode:** combined heatmap, every path, every event and attention sized by how many players looked.
+- **Sessions span scene loads** (`keepSessionAcrossScenes`, on by default). Scenes visited are recorded; frames, events and attention store their scene.
+- **Welcome window** that opens on first load with a live setup checklist built from every module's setup steps, the event API, a module list with Add buttons, and tools.
+- **Performance module:** FPS, 1% lows, hitches, per scene, with Dashboard tab.
+- `PlaySenseManager.SessionStarted` event.
+- Session file format v3 (older files still load).
+
+### Changed
+- `PlaySensePerception` is now the Attention module. Namespace `PlaySense.Perception` → `PlaySense.Attention`.
+- Movement sampling moved into `PlaySenseMovementModule` (added to the manager automatically).
+- The Dashboard is tabbed; tabs come from modules.
+- "Set Up Scene" runs every module's automatic setup steps.
+- Distance and paths break at scene changes as well as teleports.
+
 ## [0.2.0] - 2026-10-31
 
 ### Added
